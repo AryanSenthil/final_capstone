@@ -1,0 +1,82 @@
+# Core ML/AI packages
+tensorflow[and-cuda]
+tensorboard
+keras
+scikit-learn
+scipy
+
+# Data manipulation
+numpy
+pandas
+pyarrow
+narwhals
+
+# Visualization
+matplotlib
+seaborn
+altair
+plotly
+graphviz
+pydot
+
+# Jupyter ecosystem
+jupyterlab
+ipykernel
+ipython
+notebook
+
+# Web frameworks
+streamlit
+uvicorn
+fastapi
+
+# HTTP clients
+httpx
+aiohttp
+requests
+
+# API clients
+anthropic   
+openai
+tiktoken
+
+# Database
+sqlalchemy
+aiosqlite
+
+# Data validation
+pydantic
+pydantic-settings
+
+# Testing
+pytest
+mypy
+
+# Essential utilities
+beautifulsoup4
+lxml
+pillow
+python-dotenv
+rich
+tqdm
+click
+watchdog
+
+# Async
+anyio
+asyncio
+
+# Data formats
+pyyaml
+orjson
+
+# Development
+debugpy
+gitpython
+
+# ML support
+h5py
+joblib
+
+# Letta client
+letta-client
