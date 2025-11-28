@@ -91,6 +91,8 @@ Respond with ONLY a JSON object (no markdown, no explanation):
 def generate_database_metadata(
     label: str,
     csv_files: List[Path],
+    source_folder: Path,
+    database_label_dir: Path,
     time_column: int,
     values_column: int,
     values_label: str,
@@ -103,48 +105,54 @@ def generate_database_metadata(
 ) -> Dict:
     """
     Generate metadata for processed database folder.
-    
+
     Returns metadata dict suitable for scientists viewing the data.
     """
     # Sample first CSV to get additional info
     sample_file = csv_files[0]
     df = pd.read_csv(sample_file, skiprows=skip_rows, header=None)
-    
+
     time = df.iloc[:, time_column].values
     values = df.iloc[:, values_column].values
-    
+
+    # Calculate folder size
+    folder_size_bytes = sum(f.stat().st_size for f in database_label_dir.glob("*.csv"))
+
     metadata = {
         "generated_at": datetime.now().isoformat(),
         "classification_label": label,
-        
+        "source_folder": source_folder.name,
+
         # Data description
         "data_type": f"Time-series: {values_label}",
         "measurement_type": values_label,
-        
+
         # Processing parameters
         "processing": {
-            "time_interval": time_interval,
+            "interpolation_interval": time_interval,
             "chunk_duration": chunk_duration,
             "padding_duration": padding_duration,
             "interpolation": "linear",
-            "total_duration_per_chunk": chunk_duration + 2 * padding_duration
+            "time_length": chunk_duration + 2 * padding_duration
         },
-        
+
         # CSV structure
         "source_csv_structure": {
             "time_column": time_column,
             "values_column": values_column,
             "skip_rows": skip_rows
         },
-        
+
         # Dataset statistics
         "dataset": {
             "total_chunks": total_chunks,
             "chunk_range": f"{label}_{chunk_range[0]:04d} to {label}_{chunk_range[1]:04d}",
             "source_files_count": len(csv_files),
-            "samples_per_chunk": int((chunk_duration + 2 * padding_duration) / time_interval) + 1
+            "samples_per_chunk": int((chunk_duration + 2 * padding_duration) / time_interval) + 1,
+            "folder_size_bytes": folder_size_bytes,
+            "folder_size_mb": round(folder_size_bytes / (1024 * 1024), 2)
         },
-        
+
         # Sample statistics from first file
         "sample_statistics": {
             "original_sampling_rate": f"{1.0 / np.mean(np.diff(time)):.2f} Hz",
@@ -153,7 +161,7 @@ def generate_database_metadata(
             "value_std": float(np.std(values))
         }
     }
-    
+
     return metadata
 
 

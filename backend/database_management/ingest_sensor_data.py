@@ -130,7 +130,7 @@ def ingest_sensor_data(
                 counter += 1
             print(f"  Folder already exists, saving as: {raw_database_import_dir.name}")
         shutil.copytree(import_folder, raw_database_import_dir)
-        print(f"✓ Copied to: {raw_database_import_dir}\n")
+        print(f"[OK] Copied to: {raw_database_import_dir}\n")
     
     # Get all CSV files
     if RECURSIVE_SEARCH:
@@ -159,15 +159,15 @@ def ingest_sensor_data(
             values_label = structure["values_label"]
             skip_rows = structure["skip_rows"]
             
-            print(f"✓ Detected structure:")
+            print(f"[OK] Detected structure:")
             print(f"  - Skip rows: {skip_rows}")
             print(f"  - Time column: {time_column}")
             print(f"  - Values column: {values_column}")
             print(f"  - Values label: {values_label}")
             print("="*70 + "\n")
-            
+
         except Exception as e:
-            print(f"⚠ Auto-detection failed: {e}")
+            print(f"[WARN] Auto-detection failed: {e}")
             print("Falling back to defaults: time=0, values=1, skip=0\n")
             from .constants import (
                 DEFAULT_TIME_COLUMN, DEFAULT_VALUES_COLUMN,
@@ -203,14 +203,14 @@ def ingest_sensor_data(
         
         if existing_numbers:
             chunk_counter = max(existing_numbers) + 1
-            print(f"✓ Found {len(existing_files)} existing files")
+            print(f"[OK] Found {len(existing_files)} existing files")
             print(f"  Append mode: Starting from chunk {chunk_counter}\n")
         else:
             chunk_counter = CHUNK_COUNTER_START
     else:
         chunk_counter = CHUNK_COUNTER_START
         if not APPEND_MODE and existing_files:
-            print(f"⚠ Overwrite mode: Will replace existing files\n")
+            print(f"[WARN] Overwrite mode: Will replace existing files\n")
     
     starting_counter = chunk_counter
     
@@ -334,6 +334,8 @@ def ingest_sensor_data(
         db_metadata = generate_database_metadata(
             label=classification_label,
             csv_files=csv_files,
+            source_folder=import_folder,
+            database_label_dir=database_label_dir,
             time_column=time_column,
             values_column=values_column,
             values_label=values_label,
