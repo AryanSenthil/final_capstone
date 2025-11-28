@@ -7,156 +7,142 @@ A full-stack application for managing and visualizing sensor data with features 
 
 ### Backend
 - **Framework**: FastAPI (Python)
-- **Port**: 5000
-- **Location**: `/home/ari/Documents/final_capstone/backend`
+- **Port**: 8000
+- **Location**: `backend/`
 - **Main file**: `api.py`
-- **Virtual env**: `.venv` (Python 3.10)
+- **Virtual env**: `.venv` (managed with `uv`)
 
 ### Frontend
 - **Framework**: React + TypeScript with Vite
-- **Port**: 5173
-- **Location**: `/home/ari/Documents/final_capstone/frontend`
+- **Port**: 5000 (or 5001 if 5000 is in use)
+- **Location**: `frontend/`
 - **UI Library**: Tailwind CSS + shadcn/ui components
 - **Charts**: Recharts
 - **Routing**: Wouter
 - **Data fetching**: TanStack Query (React Query)
 
-## Key Features
+## CRITICAL: Files That Must Be Tracked in Git
 
-### 1. Database View (`/database` - Main page)
-- Lists all labeled datasets (processed sensor data)
-- Shows metadata: label, chunks count, measurement type, duration
-- Click on dataset to view details
+The following files are essential and MUST be committed:
 
-### 2. Label Detail View (`/database/:id`)
-- **Left sidebar**: File list with individual download buttons
-- **Right panel**:
-  - Dataset metadata card
-  - Time-series chart visualization
-- **Download features**:
-  - Individual file download (per CSV)
-  - Download All button (downloads as ZIP)
+### Frontend
+- `frontend/client/src/lib/queryClient.ts` - **Contains URL building logic for API calls**
+- `frontend/client/src/lib/utils.ts` - Utility functions
+- `frontend/vite.config.ts` - Vite config with proxy settings
 
-### 3. Raw Database View (`/raw-database`)
-- Shows imported raw data organized by folders
-- Collapsible folder view with file lists
-- **Download features**:
-  - Individual file download buttons
-  - Download All per folder (ZIP)
+### Backend
+- `backend/requirements.txt` - Must include: fastapi, uvicorn, pandas, numpy, scipy, pydantic, pydantic-settings, python-dotenv, openai
 
-### 4. Add Data Modal
-- Upload CSV files
-- Configure processing parameters
-- Triggers backend data processing
+## Quick Start
 
-## API Endpoints
+### 1. Backend Setup
+```bash
+cd backend
+uv venv .venv
+uv pip install -r requirements.txt
+.venv/bin/uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+```
 
-### Labels (Processed Data)
-- `GET /api/labels` - List all labeled datasets
-- `GET /api/labels/:id` - Get dataset details
-- `GET /api/labels/:id/files` - List files in dataset
-- `GET /api/labels/:id/files/:filename` - Get file data for chart
-- `GET /api/labels/:id/files/:filename/download` - Download single file
-- `GET /api/labels/:id/download` - Download all files as ZIP
+### 2. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev:client
+```
 
-### Raw Database
-- `GET /api/raw-database` - List all raw folders
-- `GET /api/raw-database/:folder_id` - Get folder details
-- `GET /api/raw-database/:folder_id/files/:filename/download` - Download single file
-- `GET /api/raw-database/:folder_id/download` - Download all files in folder as ZIP
+### Access
+- **Frontend**: http://localhost:5000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+## Architecture
+
+### API URL Building (IMPORTANT)
+The frontend uses TanStack Query with a custom `defaultQueryFn` in `queryClient.ts` that builds URLs from queryKey arrays:
+- `["/api/labels"]` → `/api/labels`
+- `["/api/labels", "myLabel"]` → `/api/labels/myLabel`
+- `["/api/browse", "?path=/home"]` → `/api/browse?path=/home`
+
+Query strings (starting with `?`) are appended directly, path segments get `/` prefix.
+
+### Vite Proxy
+Frontend proxies `/api/*` requests to `http://localhost:8000` (configured in `vite.config.ts`)
+
+### CORS
+Backend allows origins: localhost:5000, localhost:5001, localhost:5173
 
 ## Directory Structure
 
 ```
-/home/ari/Documents/final_capstone/
 ├── backend/
-│   ├── api.py              # Main FastAPI application
-│   ├── database.py         # Database management
-│   ├── requirements.txt    # Python dependencies
-│   └── .venv/             # Virtual environment
+│   ├── api.py                    # FastAPI application
+│   ├── requirements.txt          # Python dependencies
+│   ├── database_management/      # Data ingestion module
+│   │   ├── ingest_sensor_data.py # CSV processing pipeline
+│   │   └── delete_dataset.py     # Dataset deletion
+│   ├── settings/
+│   │   ├── constants.py          # Paths, file patterns
+│   │   └── configs.py            # Processing parameters
+│   ├── database/                 # Processed data storage
+│   └── raw_database/             # Raw data backup
 ├── frontend/
-│   ├── client/
-│   │   └── src/
-│   │       ├── pages/
-│   │       │   ├── database.tsx           # Main database view
-│   │       │   ├── label-detail.tsx       # Dataset detail view
-│   │       │   └── raw-database.tsx       # Raw data view
-│   │       └── components/
-│   │           ├── line-chart.tsx         # Chart component
-│   │           └── add-data-modal.tsx     # Upload modal
-│   └── vite.config.ts     # Vite config (proxy to backend)
-└── data/
-    ├── labels/            # Processed labeled data
-    └── raw_database/      # Raw imported data
+│   ├── client/src/
+│   │   ├── lib/
+│   │   │   ├── queryClient.ts    # API client config (CRITICAL)
+│   │   │   └── utils.ts
+│   │   ├── pages/
+│   │   │   ├── database.tsx      # Main view
+│   │   │   ├── label-detail.tsx  # Dataset detail
+│   │   │   └── raw-database.tsx  # Raw data view
+│   │   └── components/
+│   │       └── add-data-modal.tsx # Import dialog
+│   └── vite.config.ts            # Proxy config
+└── claude.md                     # This file
 ```
 
-## Recent Changes (This Session)
+## API Endpoints
 
-### Download Functionality
-- Fixed broken individual download buttons in raw-database page
-- Added backend endpoint for individual raw file downloads
-- Changed download behavior from opening new tab to same-tab download using anchor elements
-- Added loading states and visual feedback to all download buttons
+### Labels (Processed Data)
+- `GET /api/labels` - List all datasets
+- `GET /api/labels/{id}` - Get dataset metadata
+- `GET /api/labels/{id}/files` - List files in dataset
+- `GET /api/labels/{id}/files/{filename}` - Get file data for chart
+- `GET /api/labels/{id}/files/{filename}/download` - Download single CSV
+- `GET /api/labels/{id}/download` - Download all as ZIP
+- `DELETE /api/labels/{id}` - Delete dataset
 
-### Button Interactivity
-- Added hover effects to all download buttons:
-  - Scale animation on hover
-  - Shadow effects
-  - Primary color highlight
-  - Active state (press-in effect)
-- Individual file buttons: appear on row hover, scale up on hover
-- Download All buttons: full-width interactive buttons with prominent hover states
+### Raw Database
+- `GET /api/raw-database` - List all raw folders
+- `GET /api/raw-database/{folder_id}` - Get folder details
+- `GET /api/raw-database/{folder_id}/download` - Download folder as ZIP
+- `GET /api/raw-database/{folder_id}/files/{filename}/download` - Download single file
 
-### Chart Improvements
-- Increased chart height: 450px → 550px (card), 380px → 480px (chart)
-- Added dark mode support with theme detection
-- Made axis text bold for better readability
-- Thicker line stroke: 1.5px → 2.5px
-- Theme-aware colors:
-  - **Light mode**: White background, light grey padding areas
-  - **Dark mode**: Black background, grey padding areas
-- Real-time theme switching with MutationObserver
+### Data Ingestion
+- `GET /api/browse?path=...` - Browse filesystem for folder selection
+- `POST /api/ingest` - Start data processing
+- `POST /api/suggest-label` - AI-generated label suggestion
 
-### Configuration
-- Updated Vite proxy to point to backend on port 5000 (was 8000)
+## Common Issues & Fixes
 
-## Running the Application
+### "Failed to load datasets" or 404 errors
+**Cause**: queryClient.ts not properly building URLs
+**Fix**: Ensure `queryClient.ts` joins queryKey parts with `/` for path segments
 
-### Start Backend
-```bash
-cd /home/ari/Documents/final_capstone/backend
-source .venv/bin/activate
-uvicorn api:app --host 0.0.0.0 --port 5000 --reload
-```
+### "ModuleNotFoundError: No module named 'scipy'"
+**Cause**: Missing dependency in requirements.txt
+**Fix**: `uv pip install scipy numpy`
 
-### Start Frontend
-```bash
-cd /home/ari/Documents/final_capstone/frontend
-npm run dev:client -- --port 5173
-```
+### Frontend can't connect to backend
+**Cause**: CORS or proxy misconfiguration
+**Fix**:
+1. Check backend CORS includes frontend port
+2. Check vite.config.ts proxy target is correct
+3. Ensure both servers are running
 
-### Access
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:5000
+## Data Processing Pipeline
 
-## Current State
-
-### Working Features ✅
-- All download buttons functional (individual + Download All)
-- Interactive hover effects on all buttons
-- Theme-aware chart visualization
-- Real-time data visualization
-- File management and organization
-
-### Known Configuration
-- Backend runs on port 5000
-- Frontend runs on port 5173
-- Vite proxy forwards `/api/*` requests to `http://localhost:5000`
-
-## Next Steps / TODO
-- Test download functionality with actual data
-- Consider adding progress indicators for large downloads
-- Potential improvements:
-  - Batch download selection
-  - Search/filter capabilities
-  - More chart customization options
+1. User selects folder via `/api/browse`
+2. POST to `/api/ingest` with folder path and label
+3. Backend copies raw files to `raw_database/{folder_name}/`
+4. Processes CSVs: interpolation, chunking, padding
+5. Saves to `database/{label}/` with metadata.json

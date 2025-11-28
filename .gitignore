@@ -1,149 +1,24 @@
-# =========================
-# Python
-# =========================
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual environments
+# Virtual environments (6.7GB)
 .venv/
 venv/
-ENV/
-env/
-.env.local
-.env.*.local
 
-# =========================
-# Environment variables
-# =========================
-.env
-*.env
-.env.*
-!.env.example
+# Node modules (343MB)
+node_modules/
 
-# =========================
-# Jupyter Notebook
-# =========================
-.ipynb_checkpoints/
-*.ipynb_checkpoints/
-
-# =========================
-# IDEs and Editors
-# =========================
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.project
-.pydevproject
-.settings/
-*.sublime-project
-*.sublime-workspace
-
-# =========================
-# OS generated files
-# =========================
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-*.bak
-*.tmp
-*.temp
-
-# =========================
-# Claude Code
-# =========================
-.claude/
-
-# =========================
-# Database files
-# =========================
-# Ignore database contents but keep the folders
+# Database contents (keep structure, ignore data)
 backend/database/*
 !backend/database/.gitkeep
-
 backend/raw_database/*
 !backend/raw_database/.gitkeep
 
-# SQLite databases
-*.db
-*.sqlite
-*.sqlite3
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
 
-# =========================
-# Logs
-# =========================
-*.log
-logs/
-log/
+# Python cache
+__pycache__/
+*.pyc
 
-# =========================
-# Testing
-# =========================
-.coverage
-.pytest_cache/
-.tox/
-.nox/
-coverage.xml
-*.cover
-htmlcov/
-.hypothesis/
-
-# =========================
-# Build artifacts
-# =========================
-*.manifest
-*.spec
-
-# =========================
-# Frontend (for future use)
-# =========================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Build outputs
-frontend/dist/
-frontend/build/
-.next/
-out/
-
-# =========================
-# Misc
-# =========================
-*.pickle
-*.pkl
-*.h5
-*.hdf5
-*.parquet
-*.csv
-!requirements*.txt
-# Replit
-.local/
-.replit
-replit.nix
+# OS files
+.DS_Store

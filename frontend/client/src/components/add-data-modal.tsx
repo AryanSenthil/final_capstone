@@ -214,7 +214,7 @@ export function AddDataModal() {
           <Plus className="h-5 w-5" /> Add Data
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[90vh]">
+      <DialogContent className="sm:max-w-[1100px] w-[95vw] max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             {showBrowser ? (
