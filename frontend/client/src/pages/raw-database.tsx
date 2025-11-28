@@ -23,6 +23,45 @@ import { cn } from "@/lib/utils";
 export default function RawDatabasePage() {
   // Track expanded state for each folder
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  // Track downloading state for individual files (key: "folderId-filename")
+  const [downloadingFiles, setDownloadingFiles] = useState<Record<string, boolean>>({});
+  // Track downloading state for "Download All" per folder
+  const [downloadingFolders, setDownloadingFolders] = useState<Record<string, boolean>>({});
+
+  const handleDownloadFile = async (folderId: string, filename: string) => {
+    const key = `${folderId}-${filename}`;
+    setDownloadingFiles(prev => ({ ...prev, [key]: true }));
+
+    // Download in same tab using hidden anchor
+    const link = document.createElement('a');
+    link.href = `/api/raw-database/${folderId}/files/${filename}/download`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Reset after short delay to show feedback
+    setTimeout(() => {
+      setDownloadingFiles(prev => ({ ...prev, [key]: false }));
+    }, 1500);
+  };
+
+  const handleDownloadAll = async (folderId: string) => {
+    setDownloadingFolders(prev => ({ ...prev, [folderId]: true }));
+
+    // Download in same tab using hidden anchor
+    const link = document.createElement('a');
+    link.href = `/api/raw-database/${folderId}/download`;
+    link.download = `${folderId}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Reset after short delay to show feedback
+    setTimeout(() => {
+      setDownloadingFolders(prev => ({ ...prev, [folderId]: false }));
+    }, 2000);
+  };
 
   // Fetch raw folders
   const { data: rawFolders, isLoading, error } = useQuery<RawFolder[]>({
@@ -130,10 +169,27 @@ export default function RawDatabasePage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => window.open(`/api/raw-database/${folder.id}/download`, '_blank')}
+                          className={cn(
+                            "h-7 text-xs transition-all duration-200",
+                            "hover:bg-primary hover:text-primary-foreground hover:shadow-md hover:scale-105",
+                            "active:scale-95",
+                            downloadingFolders[folder.id] && "bg-primary/10 text-primary"
+                          )}
+                          disabled={downloadingFolders[folder.id]}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadAll(folder.id);
+                          }}
                         >
-                          <Download className="mr-2 h-3 w-3" /> Download All
+                          {downloadingFolders[folder.id] ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Downloading...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="mr-2 h-3 w-3" /> Download All
+                            </>
+                          )}
                         </Button>
                       </div>
                       <div className="overflow-y-auto p-2 space-y-1">
@@ -142,8 +198,29 @@ export default function RawDatabasePage() {
                             <span className="truncate font-mono text-muted-foreground group-hover:text-foreground">{file.name}</span>
                             <div className="flex items-center gap-3">
                                <span className="text-xs text-muted-foreground">{file.size}</span>
-                               <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" title="Download file">
-                                 <Download className="h-3 w-3 text-primary" />
+                               <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 className={cn(
+                                   "h-6 w-6 transition-all duration-200",
+                                   "hover:bg-primary hover:text-primary-foreground hover:shadow-md hover:scale-110",
+                                   "active:scale-95",
+                                   downloadingFiles[`${folder.id}-${file.name}`]
+                                     ? "opacity-100 bg-primary/10"
+                                     : "opacity-0 group-hover:opacity-100"
+                                 )}
+                                 title="Download file"
+                                 disabled={downloadingFiles[`${folder.id}-${file.name}`]}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleDownloadFile(folder.id, file.name);
+                                 }}
+                               >
+                                 {downloadingFiles[`${folder.id}-${file.name}`] ? (
+                                   <Loader2 className="h-3 w-3 animate-spin" />
+                                 ) : (
+                                   <Download className="h-3 w-3" />
+                                 )}
                                </Button>
                             </div>
                           </div>

@@ -26,6 +26,10 @@ export default function LabelDetailView() {
   const id = params?.id;
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  // Track downloading state for individual files
+  const [downloadingFiles, setDownloadingFiles] = useState<Record<string, boolean>>({});
+  // Track downloading state for "Download All"
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   // Fetch dataset metadata
   const { data: dataset, isLoading: datasetLoading, error: datasetError } = useQuery<Dataset>({
@@ -46,11 +50,37 @@ export default function LabelDetailView() {
   });
 
   const handleDownloadFile = (filename: string) => {
-    window.open(`/api/labels/${id}/files/${filename}/download`, '_blank');
+    setDownloadingFiles(prev => ({ ...prev, [filename]: true }));
+
+    // Download in same tab using hidden anchor
+    const link = document.createElement('a');
+    link.href = `/api/labels/${id}/files/${filename}/download`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Reset after short delay to show feedback
+    setTimeout(() => {
+      setDownloadingFiles(prev => ({ ...prev, [filename]: false }));
+    }, 1500);
   };
 
   const handleDownloadAll = () => {
-    window.open(`/api/labels/${id}/download`, '_blank');
+    setDownloadingAll(true);
+
+    // Download in same tab using hidden anchor
+    const link = document.createElement('a');
+    link.href = `/api/labels/${id}/download`;
+    link.download = `${id}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Reset after short delay to show feedback
+    setTimeout(() => {
+      setDownloadingAll(false);
+    }, 2000);
   };
 
   if (datasetLoading) {
@@ -137,16 +167,27 @@ export default function LabelDetailView() {
                         variant="ghost"
                         size="icon"
                         className={cn(
-                          "h-6 w-6 absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity",
-                          selectedFile === file.name ? "text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground" : "hover:bg-background/50"
+                          "h-6 w-6 absolute right-1 transition-all duration-200",
+                          "hover:scale-110 hover:shadow-md active:scale-95",
+                          downloadingFiles[file.name]
+                            ? "opacity-100 bg-primary/10"
+                            : "opacity-0 group-hover:opacity-100",
+                          selectedFile === file.name
+                            ? "text-primary-foreground hover:bg-primary-foreground/30"
+                            : "hover:bg-primary hover:text-primary-foreground"
                         )}
                         title="Download file"
+                        disabled={downloadingFiles[file.name]}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDownloadFile(file.name);
                         }}
                       >
-                        <Download className="h-3 w-3" />
+                        {downloadingFiles[file.name] ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Download className="h-3 w-3" />
+                        )}
                       </Button>
                     </div>
                   ))
@@ -155,8 +196,26 @@ export default function LabelDetailView() {
             </ScrollArea>
           </div>
           <div className="p-4 border-t border-border bg-muted/30">
-            <Button className="w-full gap-2" variant="outline" onClick={handleDownloadAll}>
-              <Download className="h-4 w-4" /> Download All
+            <Button
+              className={cn(
+                "w-full gap-2 transition-all duration-200",
+                "hover:bg-primary hover:text-primary-foreground hover:shadow-lg hover:scale-[1.02] hover:border-primary",
+                "active:scale-[0.98]",
+                downloadingAll && "bg-primary/10 border-primary/30"
+              )}
+              variant="outline"
+              disabled={downloadingAll}
+              onClick={handleDownloadAll}
+            >
+              {downloadingAll ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" /> Download All
+                </>
+              )}
             </Button>
           </div>
         </Card>
@@ -218,7 +277,7 @@ export default function LabelDetailView() {
           </Card>
 
           {/* Graph Area */}
-          <Card className="flex-1 border-border shadow-sm flex flex-col min-h-[450px]">
+          <Card className="flex-1 border-border shadow-sm flex flex-col min-h-[550px]">
             <CardHeader className="pb-2 border-b border-border flex flex-row items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-lg flex items-center gap-2 text-primary">
@@ -240,7 +299,7 @@ export default function LabelDetailView() {
                   data={fileData.data}
                   label={dataset.label}
                   yAxisLabel={fileData.yAxisLabel}
-                  height={380}
+                  height={480}
                 />
               ) : (
                 <div className="text-center text-muted-foreground space-y-2">

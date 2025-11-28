@@ -210,8 +210,8 @@ export function AddDataModal() {
       }
     }}>
       <DialogTrigger asChild>
-        <Button className="gap-2 shadow-md hover:shadow-lg transition-all">
-          <Plus className="h-4 w-4" /> Add Data
+        <Button size="lg" className="gap-2 shadow-md hover:shadow-lg transition-all text-base px-6 py-3 h-12">
+          <Plus className="h-5 w-5" /> Add Data
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[90vh]">

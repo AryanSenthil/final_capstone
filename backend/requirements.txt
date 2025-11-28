@@ -1,82 +1,511 @@
-# Core ML/AI packages
-tensorflow[and-cuda]
-tensorboard
-keras
-scikit-learn
-scipy
-
-# Data manipulation
-numpy
-pandas
-pyarrow
-narwhals
-
-# Visualization
-matplotlib
-seaborn
-altair
-plotly
-graphviz
-pydot
-
-# Jupyter ecosystem
-jupyterlab
-ipykernel
-ipython
-notebook
-
-# Web frameworks
-streamlit
-uvicorn
-fastapi
-
-# HTTP clients
-httpx
-aiohttp
-requests
-
-# API clients
-anthropic   
-openai
-tiktoken
-
-# Database
-sqlalchemy
-aiosqlite
-
-# Data validation
-pydantic
-pydantic-settings
-
-# Testing
-pytest
-mypy
-
-# Essential utilities
-beautifulsoup4
-lxml
-pillow
-python-dotenv
-rich
-tqdm
-click
-watchdog
-
-# Async
-anyio
-asyncio
-
-# Data formats
-pyyaml
-orjson
-
-# Development
-debugpy
-gitpython
-
-# ML support
-h5py
-joblib
-
-# Letta client
-letta-client
+action-msgs==1.2.2
+action-tutorials-interfaces==0.20.6
+# Editable install with no version control (action-tutorials-py==0.20.6)
+-e /home/ari/ros2_humble/build/action_tutorials_py
+actionlib-msgs==4.9.0
+aiohappyeyeballs==2.6.1
+aiohttp==3.13.2
+aiosignal==1.4.0
+ament-clang-format==0.12.14
+ament-clang-tidy==0.12.14
+ament-cmake-google-benchmark==1.3.12
+ament-cmake-test==1.3.12
+ament-copyright==0.12.14
+ament-cppcheck==0.12.14
+ament-cpplint==0.12.14
+ament-flake8==0.12.14
+ament-index-python==1.4.0
+ament-lint==0.12.14
+ament-lint-cmake==0.12.14
+ament-mypy==0.12.14
+ament-package==0.14.1
+ament-pclint==0.12.14
+ament-pep257==0.12.14
+ament-pycodestyle==0.12.14
+ament-pyflakes==0.12.14
+ament-uncrustify==0.12.14
+ament-xmllint==0.12.14
+annotated-types==0.7.0
+anyio==4.11.0
+appdirs==1.4.4
+apturl==0.5.2
+argcomplete==1.8.1
+asttokens==3.0.0
+async-timeout==4.0.3
+attrs==25.4.0
+azure-core==1.36.0
+azure-identity==1.25.1
+Babel==2.8.0
+bcrypt==3.2.0
+beautifulsoup4==4.14.2
+beniget==0.4.1
+bleach==6.3.0
+blinker==1.4
+bloom==0.13.0
+breezy==3.2.1
+Brlapi==0.8.3
+Brotli==1.0.9
+builtin-interfaces==1.2.2
+# Editable install with no version control (camera-info-manager-py==3.1.12)
+-e /home/ari/ros2_humble/build/camera_info_manager_py
+catkin-pkg==1.1.0
+catkin-pkg-modules==1.1.0
+certifi==2020.6.20
+cffi==2.0.0
+chardet==4.0.0
+charset-normalizer==3.4.4
+click==8.0.3
+colcon-argcomplete==0.3.3
+colcon-bash==0.5.0
+colcon-cd==0.2.1
+colcon-cmake==0.2.29
+colcon-common-extensions==0.3.0
+colcon-core==0.20.1
+colcon-defaults==0.2.9
+colcon-devtools==0.3.0
+colcon-installed-package-information==0.2.1
+colcon-library-path==0.2.1
+colcon-metadata==0.2.5
+colcon-mixin==0.2.3
+colcon-notification==0.3.0
+colcon-output==0.2.13
+colcon-override-check==0.0.1
+colcon-package-information==0.4.0
+colcon-package-selection==0.2.10
+colcon-parallel-executor==0.3.0
+colcon-pkg-config==0.1.0
+colcon-powershell==0.4.0
+colcon-python-setup-py==0.2.9
+colcon-recursive-crawl==0.2.3
+colcon-ros==0.5.0
+colcon-test-result==0.3.8
+colcon-zsh==0.5.0
+colorama==0.4.4
+comm==0.2.3
+command-not-found==0.3
+composition-interfaces==1.2.2
+configobj==5.0.6
+cov-core==1.15.0
+coverage==6.2
+cryptography==3.4.8
+cupshelpers==1.0
+custom-msgs==0.0.0
+cycler==0.11.0
+dataclasses-json==0.6.7
+dbus-python==1.2.18
+debugpy==1.8.17
+decorator==4.4.2
+defer==1.0.6
+defusedxml==0.7.1
+# Editable install with no version control (demo-nodes-py==0.20.6)
+-e /home/ari/ros2_humble/build/demo_nodes_py
+Deprecated==1.2.13
+diagnostic-msgs==4.9.0
+distlib==0.3.4
+distro==1.7.0
+distro-info==1.1+ubuntu0.2
+docutils==0.17.1
+domain-coordinator==0.10.0
+dulwich==0.20.31
+duplicity==0.8.21
+empy==3.3.4
+example-interfaces==0.9.3
+# Editable install with no version control (examples-rclpy-executors==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_executors
+# Editable install with no version control (examples-rclpy-guard-conditions==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_guard_conditions
+# Editable install with no version control (examples-rclpy-minimal-action-client==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_minimal_action_client
+# Editable install with no version control (examples-rclpy-minimal-action-server==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_minimal_action_server
+# Editable install with no version control (examples-rclpy-minimal-client==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_minimal_client
+# Editable install with no version control (examples-rclpy-minimal-publisher==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_minimal_publisher
+# Editable install with no version control (examples-rclpy-minimal-service==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_minimal_service
+# Editable install with no version control (examples-rclpy-minimal-subscriber==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_minimal_subscriber
+# Editable install with no version control (examples-rclpy-pointcloud-publisher==0.15.5)
+-e /home/ari/ros2_humble/build/examples_rclpy_pointcloud_publisher
+# Editable install with no version control (examples-tf2-py==0.25.17)
+-e /home/ari/ros2_humble/build/examples_tf2_py
+exceptiongroup==1.3.0
+executing==2.2.1
+fastbencode==0.0.5
+fasteners==0.14.1
+fastimport==0.9.14
+fastjsonschema==2.21.2
+flake8==4.0.1
+flake8-blind-except==0.2.0
+flake8-builtins==1.5.3
+flake8-class-newline==1.6.0
+flake8-comprehensions==3.8.0
+flake8-deprecated==1.3
+flake8-docstrings==1.6.0
+flake8-import-order==0.18.1
+flake8-quotes==3.3.1
+fonttools==4.29.1
+frozenlist==1.8.0
+fs==2.4.12
+future==0.18.2
+gast==0.5.2
+geometry-msgs==4.9.0
+gpg==1.16.0
+greenlet==3.2.4
+gyp==0.1
+h11==0.16.0
+html5lib==1.1
+httpcore==1.0.9
+httpie==2.6.0
+httplib2==0.20.2
+httpx==0.28.1
+httpx-sse==0.4.3
+idna==3.3
+importlib-metadata==4.6.4
+iniconfig==1.1.1
+interactive-markers==2.3.3
+ipykernel==7.1.0
+ipython==8.37.0
+jedi==0.19.2
+jeepney==0.7.1
+Jinja2==3.1.6
+jiter==0.11.1
+jpl-rosa==1.0.8
+jsonpatch==1.33
+jsonpointer==3.0.0
+jsonschema==4.25.1
+jsonschema-specifications==2025.9.1
+jupyter_client==8.6.3
+jupyter_core==5.9.1
+jupyterlab_pygments==0.3.0
+keyring==23.5.0
+kiwisolver==1.3.2
+langchain==0.3.27
+langchain-community==0.3.31
+langchain-core==0.3.79
+langchain-ollama==0.3.10
+langchain-openai==0.3.35
+langchain-text-splitters==0.3.11
+langsmith==0.4.38
+language-selector==0.1
+lark==1.1.1
+laser-geometry==2.4.1
+launch==1.0.12
+launch-pytest==1.0.12
+# Editable install with no version control (launch-ros==0.19.12)
+-e /home/ari/ros2_humble/build/launch_ros
+launch-testing==1.0.12
+# Editable install with no version control (launch-testing-examples==0.15.5)
+-e /home/ari/ros2_humble/build/launch_testing_examples
+# Editable install with no version control (launch-testing-ros==0.19.12)
+-e /home/ari/ros2_humble/build/launch_testing_ros
+launch-xml==1.0.12
+launch-yaml==1.0.12
+launchpadlib==1.10.16
+lazr.restfulclient==0.14.4
+lazr.uri==1.0.6
+lifecycle-msgs==1.2.2
+# Editable install with no version control (lifecycle-py==0.20.6)
+-e /home/ari/ros2_humble/build/lifecycle_py
+lockfile==0.12.2
+logging-demo==0.20.6
+louis==3.20.0
+lxml==4.8.0
+lz4==3.1.3+dfsg
+macaroonbakery==1.3.1
+Mako==1.1.3
+map-msgs==2.1.0
+markdown-it-py==4.0.0
+MarkupSafe==2.0.1
+marshmallow==3.26.1
+matplotlib==3.5.1
+matplotlib-inline==0.2.1
+mccabe==0.6.1
+mdurl==0.1.2
+mercurial==6.1.1
+message-filters==4.3.11
+mistune==3.1.4
+monotonic==1.6
+more-itertools==8.10.0
+mpmath==0.0.0
+msal==1.34.0
+msal-extensions==1.3.1
+multidict==6.7.0
+mypy==0.942
+mypy_extensions==1.1.0
+nav-msgs==4.9.0
+nbclient==0.10.2
+nbconvert==7.16.6
+nbformat==5.10.4
+nest-asyncio==1.6.0
+netifaces==0.11.0
+nose==1.3.7
+nose2==0.9.2
+notify2==0.3
+numpy==2.2.6
+oauthlib==3.2.0
+olefile==0.46
+ollama==0.6.0
+openai==2.6.1
+orjson==3.11.4
+osrf-pycommon==2.1.7
+packaging==25.0
+pandas==2.3.3
+pandocfilters==1.5.1
+paramiko==2.9.3
+parso==0.8.5
+patiencediff==0.2.1
+pendulum-msgs==0.20.6
+pexpect==4.8.0
+pillow==12.0.0
+platformdirs==4.5.0
+pluggy==0.13.0
+ply==3.11
+prompt_toolkit==3.0.52
+propcache==0.4.1
+protobuf==3.12.4
+psutil==5.9.0
+ptyprocess==0.7.0
+pure_eval==0.2.3
+py==1.10.0
+pycairo==1.20.1
+pycodestyle==2.8.0
+pycparser==2.23
+pycups==2.0.1
+pydantic==2.12.3
+pydantic-settings==2.11.0
+pydantic_core==2.41.4
+pydocstyle==6.1.1
+pydot==1.4.2
+pyflakes==2.4.0
+PyGithub==1.55
+Pygments==2.19.2
+PyGObject==3.42.1
+pygraphviz==1.7
+PyInputPlus==0.2.12
+PyJWT==2.3.0
+pymacaroons==0.13.0
+PyNaCl==1.5.0
+pyparsing==2.4.7
+PyQt5==5.15.6
+PyQt5-sip==12.9.1
+pyRFC3339==1.1
+PySimpleValidate==0.2.12
+PySocks==1.7.1
+pytest==6.2.5
+pytest-cov==3.0.0
+pytest-mock==3.6.1
+pytest-repeat==0.9.1
+pytest-rerunfailures==10.2
+pytest-timeout==2.1.0
+python-apt==2.4.0+ubuntu4
+python-dateutil==2.9.0.post0
+python-debian==0.1.43+ubuntu1.1
+python-dotenv==1.2.1
+python-gitlab==2.10.1
+python-qt-binding==1.1.3
+pythran==0.10.0
+pytz==2022.1
+pyxdg==0.27
+PyYAML==6.0.1
+pyzmq==27.1.0
+qt-dotgraph==2.2.4
+qt-gui==2.2.4
+qt-gui-cpp==2.2.4
+qt-gui-py-common==2.2.4
+# Editable install with no version control (quality-of-service-demo-py==0.20.6)
+-e /home/ari/ros2_humble/build/quality_of_service_demo_py
+rcl-interfaces==1.2.2
+rclpy==3.3.18
+rcutils==5.1.7
+referencing==0.37.0
+regex==2025.10.23
+reportlab==3.6.8
+requests==2.32.5
+requests-toolbelt==1.0.0
+resource-retriever==3.1.3
+rich==14.2.0
+rmw-dds-common==1.6.0
+roman==3.3
+# Editable install with no version control (ros2action==0.18.14)
+-e /home/ari/ros2_humble/build/ros2action
+# Editable install with no version control (ros2bag==0.15.15)
+-e /home/ari/ros2_humble/build/ros2bag
+# Editable install with no version control (ros2cli==0.18.14)
+-e /home/ari/ros2_humble/build/ros2cli
+ros2cli-test-interfaces==0.18.14
+# Editable install with no version control (ros2component==0.18.14)
+-e /home/ari/ros2_humble/build/ros2component
+# Editable install with no version control (ros2doctor==0.18.14)
+-e /home/ari/ros2_humble/build/ros2doctor
+# Editable install with no version control (ros2interface==0.18.14)
+-e /home/ari/ros2_humble/build/ros2interface
+# Editable install with no version control (ros2launch==0.19.12)
+-e /home/ari/ros2_humble/build/ros2launch
+# Editable install with no version control (ros2lifecycle==0.18.14)
+-e /home/ari/ros2_humble/build/ros2lifecycle
+# Editable install with no version control (ros2multicast==0.18.14)
+-e /home/ari/ros2_humble/build/ros2multicast
+# Editable install with no version control (ros2node==0.18.14)
+-e /home/ari/ros2_humble/build/ros2node
+# Editable install with no version control (ros2param==0.18.14)
+-e /home/ari/ros2_humble/build/ros2param
+# Editable install with no version control (ros2pkg==0.18.14)
+-e /home/ari/ros2_humble/build/ros2pkg
+# Editable install with no version control (ros2plugin==5.1.2)
+-e /home/ari/ros2_humble/build/ros2plugin
+# Editable install with no version control (ros2run==0.18.14)
+-e /home/ari/ros2_humble/build/ros2run
+# Editable install with no version control (ros2service==0.18.14)
+-e /home/ari/ros2_humble/build/ros2service
+# Editable install with no version control (ros2test==0.4.0)
+-e /home/ari/ros2_humble/build/ros2test
+# Editable install with no version control (ros2topic==0.18.14)
+-e /home/ari/ros2_humble/build/ros2topic
+# Editable install with no version control (ros2trace==4.1.1)
+-e /home/ari/ros2_humble/build/ros2trace
+rosbag2-interfaces==0.15.15
+rosbag2-py==0.15.15
+rosbag2-storage-mcap-testdata==0.15.15
+rosdep==0.26.0
+rosdep-modules==0.26.0
+rosdistro==1.0.1
+rosdistro-modules==1.0.1
+rosgraph-msgs==1.2.2
+rosidl-adapter==3.1.7
+rosidl-cli==3.1.7
+rosidl-cmake==3.1.7
+rosidl-generator-c==3.1.7
+rosidl-generator-cpp==3.1.7
+rosidl-generator-dds-idl==0.8.1
+rosidl-generator-py==0.14.6
+rosidl-parser==3.1.7
+rosidl-runtime-py==0.9.3
+rosidl-typesupport-c==2.0.2
+rosidl-typesupport-cpp==2.0.2
+rosidl-typesupport-fastrtps-c==2.2.3
+rosidl-typesupport-fastrtps-cpp==2.2.3
+rosidl-typesupport-introspection-c==3.1.7
+rosidl-typesupport-introspection-cpp==3.1.7
+rospkg==1.6.0
+rospkg-modules==1.6.0
+rpds-py==0.28.0
+rpyutils==0.2.2
+# Editable install with no version control (rqt==1.1.9)
+-e /home/ari/ros2_humble/build/rqt
+# Editable install with no version control (rqt-action==2.0.1)
+-e /home/ari/ros2_humble/build/rqt_action/src
+# Editable install with no version control (rqt-bag==1.1.5)
+-e /home/ari/ros2_humble/build/rqt_bag/src
+# Editable install with no version control (rqt-bag-plugins==1.1.5)
+-e /home/ari/ros2_humble/build/rqt_bag_plugins/src
+# Editable install with no version control (rqt-console==2.0.3)
+-e /home/ari/ros2_humble/build/rqt_console/src
+# Editable install with no version control (rqt-graph==1.3.1)
+-e /home/ari/ros2_humble/build/rqt_graph/src
+# Editable install with no version control (rqt-gui==1.1.9)
+-e /home/ari/ros2_humble/build/rqt_gui/src
+# Editable install with no version control (rqt-gui-py==1.1.9)
+-e /home/ari/ros2_humble/build/rqt_gui_py/src
+# Editable install with no version control (rqt-msg==1.2.0)
+-e /home/ari/ros2_humble/build/rqt_msg/src
+# Editable install with no version control (rqt-plot==1.1.5)
+-e /home/ari/ros2_humble/build/rqt_plot/src
+# Editable install with no version control (rqt-publisher==1.5.0)
+-e /home/ari/ros2_humble/build/rqt_publisher/src
+rqt-py-common==1.1.9
+# Editable install with no version control (rqt-py-console==1.0.2)
+-e /home/ari/ros2_humble/build/rqt_py_console/src
+# Editable install with no version control (rqt-reconfigure==1.1.2)
+-e /home/ari/ros2_humble/build/rqt_reconfigure/src
+# Editable install with no version control (rqt-service-caller==1.0.5)
+-e /home/ari/ros2_humble/build/rqt_service_caller/src
+# Editable install with no version control (rqt-shell==1.0.2)
+-e /home/ari/ros2_humble/build/rqt_shell/src
+# Editable install with no version control (rqt-srv==1.0.3)
+-e /home/ari/ros2_humble/build/rqt_srv/src
+# Editable install with no version control (rqt-topic==1.5.0)
+-e /home/ari/ros2_humble/build/rqt_topic/src
+scipy==1.8.0
+screen-resolution-extra==0.0.0
+SecretStorage==3.3.1
+sensor-msgs==4.9.0
+sensor-msgs-py==4.9.0
+shape-msgs==4.9.0
+six==1.16.0
+sniffio==1.3.1
+snowballstemmer==2.2.0
+soupsieve==2.8
+SQLAlchemy==2.0.44
+# Editable install with no version control (sros2==0.10.7)
+-e /home/ari/ros2_humble/build/sros2
+stack-data==0.6.3
+statistics-msgs==1.2.2
+std-msgs==4.9.0
+std-srvs==4.9.0
+stdiomask==0.0.6
+stereo-msgs==4.9.0
+sympy==1.9
+systemd-python==234
+tenacity==9.1.2
+# Editable install with no version control (test-launch-ros==0.19.12)
+-e /home/ari/ros2_humble/build/test_launch_ros
+test-msgs==1.2.2
+# Editable install with no version control (test-tracetools-launch==4.1.1)
+-e /home/ari/ros2_humble/build/test_tracetools_launch
+tf2-geometry-msgs==0.25.17
+tf2-kdl==0.25.17
+tf2-msgs==0.25.17
+tf2-py==0.25.17
+# Editable install with no version control (tf2-ros-py==0.25.17)
+-e /home/ari/ros2_humble/build/tf2_ros_py
+tf2-sensor-msgs==0.25.17
+# Editable install with no version control (tf2-tools==0.25.17)
+-e /home/ari/ros2_humble/build/tf2_tools
+tiktoken==0.12.0
+tinycss2==1.4.0
+toml==0.10.2
+tomli==1.2.2
+# Editable install with no version control (topic-monitor==0.20.6)
+-e /home/ari/ros2_humble/build/topic_monitor
+tornado==6.5.2
+tqdm==4.67.1
+# Editable install with no version control (tracetools-launch==4.1.1)
+-e /home/ari/ros2_humble/build/tracetools_launch
+tracetools-read==4.1.1
+# Editable install with no version control (tracetools-test==4.1.1)
+-e /home/ari/ros2_humble/build/tracetools_test
+tracetools-trace==4.1.1
+traitlets==5.14.3
+trajectory-msgs==4.9.0
+turtlesim==1.4.3
+typed-ast==1.4.3
+typeguard==2.2.2
+typing-inspect==0.9.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzdata==2025.2
+ubuntu-drivers-common==0.0.0
+ubuntu-pro-client==8001
+ufoLib2==0.13.1
+ufw==0.36.1
+unattended-upgrades==0.1
+unicodedata2==14.0.0
+unique-identifier-msgs==2.2.1
+ur-dashboard-msgs==2.10.0
+urllib3==1.26.5
+usb-creator==0.3.7
+uv==0.9.7
+vcstool==0.3.0
+vcstools==0.1.42
+visualization-msgs==4.9.0
+wadllib==1.3.6
+wcwidth==0.2.14
+webencodings==0.5.1
+wrapt==1.13.3
+xdg==5
+xkit==0.0.0
+yarl==1.22.0
+zipp==1.0.0
+zstandard==0.25.0

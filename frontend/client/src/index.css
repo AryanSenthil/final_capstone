@@ -60,16 +60,16 @@
 :root {
   /* Clean White Background */
   --background: 210 40% 98%;
-  /* Blue Font as requested - Using a deep, technical blue */
-  --foreground: 224 64% 30%;
+  /* Blue Font */
+  --foreground: 210 100% 35%;
 
   /* Cards - White with subtle border */
   --card: 0 0% 100%;
-  --card-foreground: 224 64% 30%;
+  --card-foreground: 210 100% 35%;
 
   /* Popovers */
   --popover: 0 0% 100%;
-  --popover-foreground: 224 64% 30%;
+  --popover-foreground: 210 100% 35%;
 
   /* Primary - Deep Blue (#1e40af) */
   --primary: 226 71% 40%;
@@ -105,7 +105,7 @@
 
   /* Sidebar */
   --sidebar: 220 30% 96%; /* Light blue-gray for sidebar */
-  --sidebar-foreground: 224 64% 30%;
+  --sidebar-foreground: 210 100% 35%;
   --sidebar-primary: 226 71% 40%;
   --sidebar-primary-foreground: 0 0% 98%;
   --sidebar-accent: 226 71% 90%;
@@ -166,9 +166,12 @@
   * {
     @apply border-border;
   }
+  html {
+    font-size: 20px; /* Larger base font */
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    background-image: 
+    background-image:
       radial-gradient(at 0% 0%, hsla(226, 71%, 98%, 1) 0px, transparent 50%),
       radial-gradient(at 100% 0%, hsla(210, 40%, 96%, 1) 0px, transparent 50%);
   }

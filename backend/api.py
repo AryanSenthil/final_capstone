@@ -437,6 +437,26 @@ async def download_raw_folder(folder_id: str):
     )
 
 
+@app.get("/api/raw-database/{folder_id}/files/{filename}/download")
+async def download_raw_file(folder_id: str, filename: str):
+    """Download a single file from a raw folder."""
+    folder_dir = RAW_DATABASE_DIR / folder_id
+
+    if not folder_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Folder '{folder_id}' not found")
+
+    file_path = folder_dir / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found in folder '{folder_id}'")
+
+    return FileResponse(
+        path=file_path,
+        media_type="text/csv",
+        filename=filename
+    )
+
+
 @app.get("/api/raw-database", response_model=list[RawFolder])
 async def get_raw_database():
     """Get all raw data folders."""

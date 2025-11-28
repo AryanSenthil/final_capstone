@@ -2,18 +2,22 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
-import { metaImagesPlugin } from "./vite-plugin-meta-images";
+
+// Only import Replit plugins when running on Replit
+const isReplit = process.env.REPL_ID !== undefined;
 
 export default defineConfig({
   plugins: [
     react(),
-    runtimeErrorOverlay(),
     tailwindcss(),
-    metaImagesPlugin(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
+    ...(isReplit
       ? [
+          await import("@replit/vite-plugin-runtime-error-modal").then((m) =>
+            m.default(),
+          ),
+          await import("./vite-plugin-meta-images").then((m) =>
+            m.metaImagesPlugin(),
+          ),
           await import("@replit/vite-plugin-cartographer").then((m) =>
             m.cartographer(),
           ),
@@ -49,7 +53,7 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:5000",
         changeOrigin: true,
       },
     },
