@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from settings.constants import DATABASE_DIR, RAW_DATABASE_DIR, METADATA_FILENAME
+from settings.constants import DATABASE_DIR, RAW_DATABASE_DIR, MODELS_DIR, REPORTS_DIR, METADATA_FILENAME, OPENAI_MODEL
 
 app = FastAPI(
     title="Damage Lab API",
@@ -58,6 +58,11 @@ class Dataset(BaseModel):
     sourceFile: str
     interpolationInterval: str
     stats: DatasetStats
+    # AI-generated fields (optional)
+    description: Optional[str] = None
+    category: Optional[str] = None
+    qualityScore: Optional[float] = None
+    suggestedArchitecture: Optional[str] = None
 
 
 class DataPoint(BaseModel):
@@ -171,6 +176,7 @@ def metadata_to_dataset(label: str, metadata: dict, label_dir: Path) -> Dataset:
     processing = metadata.get("processing", {})
     dataset_info = metadata.get("dataset", {})
     stats_info = metadata.get("sample_statistics", {})
+    ai_metadata = metadata.get("ai_metadata", {})
 
     # Calculate folder size
     folder_size = get_folder_size(label_dir)
@@ -196,7 +202,12 @@ def metadata_to_dataset(label: str, metadata: dict, label_dir: Path) -> Dataset:
             min=value_range[0] if len(value_range) > 0 else 0,
             max=value_range[1] if len(value_range) > 1 else 0,
             rate=stats_info.get("original_sampling_rate", "N/A")
-        )
+        ),
+        # AI-generated fields
+        description=ai_metadata.get("description"),
+        category=ai_metadata.get("category"),
+        qualityScore=ai_metadata.get("quality_score"),
+        suggestedArchitecture=ai_metadata.get("suggested_architecture"),
     )
 
 
@@ -310,6 +321,252 @@ async def delete_label(label_id: str, delete_raw: bool = True):
         message=result["message"],
         deleted_processed=result["deleted_processed"],
         deleted_raw=result["deleted_raw"]
+    )
+
+
+class GenerateMetadataResponse(BaseModel):
+    success: bool
+    description: str
+    category: str
+    quality_score: float
+    suggested_architecture: str
+    training_tips: list[str]
+
+
+@app.post("/api/labels/{label_id}/generate-metadata", response_model=GenerateMetadataResponse)
+async def generate_label_metadata(label_id: str):
+    """Use GPT to generate AI metadata (description, category, quality score, etc.) for a dataset."""
+    from openai import OpenAI
+
+    label_dir = DATABASE_DIR / label_id
+
+    if not label_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Label '{label_id}' not found")
+
+    metadata = load_metadata(label_dir)
+    if not metadata:
+        raise HTTPException(status_code=404, detail=f"Metadata not found for label '{label_id}'")
+
+    # Prepare context for GPT
+    processing = metadata.get("processing", {})
+    dataset_info = metadata.get("dataset", {})
+    stats_info = metadata.get("sample_statistics", {})
+    value_range = stats_info.get("value_range", [0, 0])
+
+    context = f"""
+Dataset Label: {label_id}
+Source Folder: {metadata.get("source_folder", "unknown")}
+Data Type: {metadata.get("data_type", "unknown")}
+Measurement Type: {metadata.get("measurement_type", "unknown")}
+
+Processing Parameters:
+- Interpolation Interval: {processing.get("interpolation_interval", "N/A")}
+- Chunk Duration: {processing.get("chunk_duration", "N/A")}s
+- Time Length: {processing.get("time_length", "N/A")}s
+- Interpolation Method: {processing.get("interpolation", "N/A")}
+
+Dataset Statistics:
+- Total Chunks: {dataset_info.get("total_chunks", 0)}
+- Samples per Chunk: {dataset_info.get("samples_per_chunk", 0)}
+- Source Files Count: {dataset_info.get("source_files_count", 0)}
+- Folder Size: {dataset_info.get("folder_size_mb", 0):.2f} MB
+
+Sample Statistics:
+- Original Sampling Rate: {stats_info.get("original_sampling_rate", "N/A")}
+- Value Range: [{value_range[0] if len(value_range) > 0 else 0}, {value_range[1] if len(value_range) > 1 else 0}]
+- Mean: {stats_info.get("value_mean", 0):.4f}
+- Std Dev: {stats_info.get("value_std", 0):.4f}
+"""
+
+    try:
+        client = OpenAI()
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an AI assistant specialized in analyzing sensor data datasets for machine learning.
+Given dataset metadata, provide:
+1. A concise description (2-3 sentences) explaining what this dataset represents
+2. A category (e.g., "structural_damage", "material_testing", "vibration_analysis", "electrical_signal", etc.)
+3. A quality score (0.0-1.0) based on data completeness, sample size, and statistics
+4. A suggested architecture ("CNN" or "ResNet") based on the data characteristics
+5. 2-3 training tips specific to this dataset
+
+Respond in JSON format:
+{
+    "description": "...",
+    "category": "...",
+    "quality_score": 0.85,
+    "suggested_architecture": "CNN",
+    "training_tips": ["tip1", "tip2", "tip3"]
+}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Analyze this sensor dataset and provide metadata:\n\n{context}"
+                }
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+
+        result = json.loads(response.choices[0].message.content)
+
+        # Save AI metadata back to the metadata.json file
+        metadata["ai_metadata"] = {
+            "description": result.get("description", ""),
+            "category": result.get("category", ""),
+            "quality_score": result.get("quality_score", 0.5),
+            "suggested_architecture": result.get("suggested_architecture", "CNN"),
+            "training_tips": result.get("training_tips", []),
+            "generated_at": datetime.now().isoformat()
+        }
+
+        metadata_path = label_dir / METADATA_FILENAME
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        return GenerateMetadataResponse(
+            success=True,
+            description=result.get("description", ""),
+            category=result.get("category", ""),
+            quality_score=result.get("quality_score", 0.5),
+            suggested_architecture=result.get("suggested_architecture", "CNN"),
+            training_tips=result.get("training_tips", [])
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate metadata: {str(e)}")
+
+
+class BatchGenerateMetadataResponse(BaseModel):
+    success: bool
+    generated_count: int
+    skipped_count: int
+    errors: list[str]
+
+
+@app.post("/api/labels/generate-all-metadata", response_model=BatchGenerateMetadataResponse)
+async def generate_all_labels_metadata(force: bool = False):
+    """Generate AI metadata for all labels that don't have it yet.
+
+    Args:
+        force: If True, regenerate metadata even for labels that already have it.
+    """
+    from openai import OpenAI
+
+    if not DATABASE_DIR.exists():
+        return BatchGenerateMetadataResponse(
+            success=True,
+            generated_count=0,
+            skipped_count=0,
+            errors=[]
+        )
+
+    generated_count = 0
+    skipped_count = 0
+    errors = []
+
+    client = OpenAI()
+
+    for label_dir in DATABASE_DIR.iterdir():
+        if not label_dir.is_dir():
+            continue
+
+        label_id = label_dir.name
+        metadata = load_metadata(label_dir)
+
+        if not metadata:
+            errors.append(f"{label_id}: No metadata.json found")
+            continue
+
+        # Skip if already has AI metadata and not forcing
+        if not force and metadata.get("ai_metadata"):
+            skipped_count += 1
+            continue
+
+        try:
+            # Prepare context for GPT
+            processing = metadata.get("processing", {})
+            dataset_info = metadata.get("dataset", {})
+            stats_info = metadata.get("sample_statistics", {})
+            value_range = stats_info.get("value_range", [0, 0])
+
+            context = f"""
+Dataset Label: {label_id}
+Source Folder: {metadata.get("source_folder", "unknown")}
+Data Type: {metadata.get("data_type", "unknown")}
+Measurement Type: {metadata.get("measurement_type", "unknown")}
+
+Processing Parameters:
+- Interpolation Interval: {processing.get("interpolation_interval", "N/A")}
+- Chunk Duration: {processing.get("chunk_duration", "N/A")}s
+- Time Length: {processing.get("time_length", "N/A")}s
+
+Dataset Statistics:
+- Total Chunks: {dataset_info.get("total_chunks", 0)}
+- Samples per Chunk: {dataset_info.get("samples_per_chunk", 0)}
+- Folder Size: {dataset_info.get("folder_size_mb", 0):.2f} MB
+
+Sample Statistics:
+- Original Sampling Rate: {stats_info.get("original_sampling_rate", "N/A")}
+- Value Range: [{value_range[0] if len(value_range) > 0 else 0}, {value_range[1] if len(value_range) > 1 else 0}]
+- Mean: {stats_info.get("value_mean", 0):.4f}
+- Std Dev: {stats_info.get("value_std", 0):.4f}
+"""
+
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an AI assistant specialized in analyzing sensor data datasets for machine learning.
+Given dataset metadata, provide a JSON response with:
+{
+    "description": "2-3 sentence description of what this dataset represents",
+    "category": "category like structural_damage, material_testing, vibration_analysis, electrical_signal",
+    "quality_score": 0.85,
+    "suggested_architecture": "CNN or ResNet",
+    "training_tips": ["tip1", "tip2"]
+}"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Analyze this sensor dataset:\n\n{context}"
+                    }
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Save AI metadata
+            metadata["ai_metadata"] = {
+                "description": result.get("description", ""),
+                "category": result.get("category", ""),
+                "quality_score": result.get("quality_score", 0.5),
+                "suggested_architecture": result.get("suggested_architecture", "CNN"),
+                "training_tips": result.get("training_tips", []),
+                "generated_at": datetime.now().isoformat()
+            }
+
+            metadata_path = label_dir / METADATA_FILENAME
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+
+            generated_count += 1
+
+        except Exception as e:
+            errors.append(f"{label_id}: {str(e)}")
+
+    return BatchGenerateMetadataResponse(
+        success=len(errors) == 0,
+        generated_count=generated_count,
+        skipped_count=skipped_count,
+        errors=errors
     )
 
 
@@ -573,21 +830,21 @@ def run_ingestion(folder_path: str, label: str, time_interval: float, chunk_dura
     from settings import configs
 
     # Temporarily update configs
-    original_interval = configs.TIME_INTERVAL
-    original_chunk = configs.CHUNK_DURATION
-    original_padding = configs.PADDING_DURATION
+    original_interval = configs.DB_TIME_INTERVAL
+    original_chunk = configs.DB_CHUNK_DURATION
+    original_padding = configs.DB_PADDING_DURATION
 
     try:
-        configs.TIME_INTERVAL = time_interval
-        configs.CHUNK_DURATION = chunk_duration
-        configs.PADDING_DURATION = padding
+        configs.DB_TIME_INTERVAL = time_interval
+        configs.DB_CHUNK_DURATION = chunk_duration
+        configs.DB_PADDING_DURATION = padding
 
         ingest_sensor_data(folder_path, label)
     finally:
         # Restore original configs
-        configs.TIME_INTERVAL = original_interval
-        configs.CHUNK_DURATION = original_chunk
-        configs.PADDING_DURATION = original_padding
+        configs.DB_TIME_INTERVAL = original_interval
+        configs.DB_CHUNK_DURATION = original_chunk
+        configs.DB_PADDING_DURATION = original_padding
 
 
 @app.post("/api/ingest", response_model=IngestResponse)
@@ -636,7 +893,7 @@ async def suggest_label(request: SuggestLabelRequest):
         client = OpenAI()
 
         response = client.chat.completions.create(
-            model="gpt-4.1-nano",
+            model=OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -661,7 +918,6 @@ Return ONLY the label, nothing else."""
                     "content": f"Generate a classification label for this folder: {folder_path}"
                 }
             ],
-            max_tokens=50,
             temperature=0.3
         )
 
@@ -691,6 +947,318 @@ Return ONLY the label, nothing else."""
             label=label if label else "dataset",
             message=f"Used fallback extraction: {str(e)}"
         )
+
+
+# ============ Training API Models ============
+
+class TrainingRequest(BaseModel):
+    model_name: str
+    labels: list[str]  # List of label names to train on
+    architecture: str = "CNN"  # "CNN" or "ResNet"
+    generate_report: bool = True
+    use_llm: bool = True
+
+
+class TrainingStatusResponse(BaseModel):
+    job_id: str
+    status: str  # "pending", "preparing", "building", "training", "complete", "error"
+    current_step: int
+    current_epoch: Optional[int] = None
+    total_epochs: Optional[int] = None
+    progress_message: str = ""
+    error_message: Optional[str] = None
+    result: Optional[dict] = None
+
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+    accuracy: str
+    loss: str
+    date: str
+    architecture: str
+    status: str
+    path: str
+    report_path: Optional[str] = None
+
+
+class ReportInfo(BaseModel):
+    id: str
+    name: str
+    size: str
+    date: str
+    model_name: str
+    path: str
+
+
+# In-memory training job tracking
+training_jobs: dict[str, dict] = {}
+
+
+def run_training_job(job_id: str, model_name: str, labels: list[str], architecture: str, generate_report: bool, use_llm: bool):
+    """Background task to run training."""
+    import threading
+    from training import run_training, DataConfig
+
+    try:
+        # Update status: preparing
+        training_jobs[job_id]["status"] = "preparing"
+        training_jobs[job_id]["current_step"] = 1
+        training_jobs[job_id]["progress_message"] = "Preparing data..."
+
+        # Collect all CSV paths from selected labels
+        data_paths = []
+        for label in labels:
+            label_dir = DATABASE_DIR / label
+            if label_dir.exists():
+                data_paths.append(str(label_dir))
+
+        if not data_paths:
+            raise ValueError("No data found for selected labels")
+
+        # Create models directory
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        save_dir = str(MODELS_DIR / model_name)
+
+        # Update status: building
+        training_jobs[job_id]["status"] = "building"
+        training_jobs[job_id]["current_step"] = 2
+        training_jobs[job_id]["progress_message"] = "Building model..."
+
+        # Update status: training
+        training_jobs[job_id]["status"] = "training"
+        training_jobs[job_id]["current_step"] = 3
+        training_jobs[job_id]["progress_message"] = "Training model..."
+
+        # Run training
+        result = run_training(
+            paths=data_paths,
+            save_dir=save_dir,
+            model_type=architecture.lower(),
+            model_name=model_name,
+            generate_report=generate_report,
+            use_llm=use_llm,
+            verbose=True,
+        )
+
+        # Update status: complete
+        training_jobs[job_id]["status"] = "complete"
+        training_jobs[job_id]["current_step"] = 4
+        training_jobs[job_id]["progress_message"] = "Training complete!"
+        training_jobs[job_id]["result"] = {
+            "accuracy": f"{result.training_result.test_accuracy * 100:.1f}%",
+            "loss": f"{result.training_result.test_loss:.4f}",
+            "model_path": save_dir,
+            "report_path": result.report_path,
+        }
+
+        # Save model metadata
+        model_metadata = {
+            "name": model_name,
+            "architecture": architecture,
+            "accuracy": result.training_result.test_accuracy,
+            "loss": result.training_result.test_loss,
+            "labels": labels,
+            "created_at": datetime.now().isoformat(),
+            "report_path": result.report_path,
+        }
+
+        model_dir = Path(save_dir)
+        model_dir.mkdir(parents=True, exist_ok=True)
+        with open(model_dir / "model_info.json", "w") as f:
+            json.dump(model_metadata, f, indent=2)
+
+    except Exception as e:
+        training_jobs[job_id]["status"] = "error"
+        training_jobs[job_id]["error_message"] = str(e)
+        training_jobs[job_id]["progress_message"] = f"Error: {str(e)}"
+
+
+@app.post("/api/training/start")
+async def start_training(request: TrainingRequest, background_tasks: BackgroundTasks):
+    """Start a new training job."""
+    import uuid
+    import threading
+
+    # Validate labels exist
+    for label in request.labels:
+        label_dir = DATABASE_DIR / label
+        if not label_dir.exists():
+            raise HTTPException(status_code=400, detail=f"Label '{label}' not found")
+
+    # Create job
+    job_id = str(uuid.uuid4())[:8]
+    training_jobs[job_id] = {
+        "job_id": job_id,
+        "model_name": request.model_name,
+        "status": "pending",
+        "current_step": 0,
+        "current_epoch": None,
+        "total_epochs": 50,
+        "progress_message": "Initializing...",
+        "error_message": None,
+        "result": None,
+    }
+
+    # Start training in background thread (not FastAPI background task for long-running)
+    thread = threading.Thread(
+        target=run_training_job,
+        args=(job_id, request.model_name, request.labels, request.architecture, request.generate_report, request.use_llm),
+        daemon=True
+    )
+    thread.start()
+
+    return {"job_id": job_id, "message": f"Training started for model '{request.model_name}'"}
+
+
+@app.get("/api/training/status/{job_id}", response_model=TrainingStatusResponse)
+async def get_training_status(job_id: str):
+    """Get status of a training job."""
+    if job_id not in training_jobs:
+        raise HTTPException(status_code=404, detail=f"Training job '{job_id}' not found")
+
+    job = training_jobs[job_id]
+    return TrainingStatusResponse(**job)
+
+
+@app.post("/api/training/stop/{job_id}")
+async def stop_training(job_id: str):
+    """Stop a training job (if possible)."""
+    if job_id not in training_jobs:
+        raise HTTPException(status_code=404, detail=f"Training job '{job_id}' not found")
+
+    # Mark as stopped (actual interruption requires more complex handling)
+    training_jobs[job_id]["status"] = "error"
+    training_jobs[job_id]["error_message"] = "Training stopped by user"
+
+    return {"message": "Training stop requested"}
+
+
+@app.get("/api/models", response_model=list[ModelInfo])
+async def get_models():
+    """Get list of all trained models."""
+    models = []
+
+    if not MODELS_DIR.exists():
+        return models
+
+    for model_dir in MODELS_DIR.iterdir():
+        if model_dir.is_dir():
+            info_path = model_dir / "model_info.json"
+            if info_path.exists():
+                with open(info_path) as f:
+                    info = json.load(f)
+
+                models.append(ModelInfo(
+                    id=model_dir.name,
+                    name=info.get("name", model_dir.name),
+                    accuracy=f"{info.get('accuracy', 0) * 100:.1f}%",
+                    loss=f"{info.get('loss', 0):.4f}",
+                    date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d"),
+                    architecture=info.get("architecture", "Unknown"),
+                    status="Active",
+                    path=str(model_dir),
+                    report_path=info.get("report_path"),
+                ))
+
+    # Sort by date (newest first)
+    models.sort(key=lambda m: m.date, reverse=True)
+    return models
+
+
+@app.get("/api/models/{model_id}", response_model=ModelInfo)
+async def get_model(model_id: str):
+    """Get details for a specific model."""
+    model_dir = MODELS_DIR / model_id
+
+    if not model_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+
+    info_path = model_dir / "model_info.json"
+    if not info_path.exists():
+        raise HTTPException(status_code=404, detail=f"Model info not found for '{model_id}'")
+
+    with open(info_path) as f:
+        info = json.load(f)
+
+    return ModelInfo(
+        id=model_dir.name,
+        name=info.get("name", model_dir.name),
+        accuracy=f"{info.get('accuracy', 0) * 100:.1f}%",
+        loss=f"{info.get('loss', 0):.4f}",
+        date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d"),
+        architecture=info.get("architecture", "Unknown"),
+        status="Active",
+        path=str(model_dir),
+        report_path=info.get("report_path"),
+    )
+
+
+@app.delete("/api/models/{model_id}")
+async def delete_model(model_id: str):
+    """Delete a model."""
+    import shutil
+
+    model_dir = MODELS_DIR / model_id
+
+    if not model_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+
+    shutil.rmtree(model_dir)
+
+    return {"success": True, "message": f"Model '{model_id}' deleted"}
+
+
+@app.get("/api/reports", response_model=list[ReportInfo])
+async def get_reports():
+    """Get list of all training reports."""
+    reports = []
+
+    # Check models directory for reports
+    if MODELS_DIR.exists():
+        for model_dir in MODELS_DIR.iterdir():
+            if model_dir.is_dir():
+                # Look for PDF reports
+                for pdf_file in model_dir.glob("*.pdf"):
+                    stat = pdf_file.stat()
+                    reports.append(ReportInfo(
+                        id=pdf_file.stem,
+                        name=pdf_file.name,
+                        size=format_file_size(stat.st_size),
+                        date=datetime.fromtimestamp(stat.st_mtime).strftime("%b %d, %Y"),
+                        model_name=model_dir.name,
+                        path=str(pdf_file),
+                    ))
+
+    # Sort by date (newest first)
+    reports.sort(key=lambda r: r.date, reverse=True)
+    return reports
+
+
+@app.get("/api/training/report/view")
+async def view_report(path: str):
+    """View a PDF report."""
+    report_path = Path(path)
+
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return FileResponse(report_path, media_type="application/pdf")
+
+
+@app.get("/api/training/report/download")
+async def download_report(path: str):
+    """Download a PDF report."""
+    report_path = Path(path)
+
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return FileResponse(
+        report_path,
+        media_type="application/pdf",
+        filename=report_path.name
+    )
 
 
 if __name__ == "__main__":

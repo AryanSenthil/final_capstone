@@ -1,0 +1,1 @@
+Kill all running development servers (both backend on port 8000 and frontend on port 5000). Use lsof to find processes on these ports and kill them. Also kill any background shell processes that are running the dev servers.

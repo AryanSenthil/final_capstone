@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useTheme } from "next-themes";
-import { Database, FileText, Menu, X, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, Sun, Moon } from "lucide-react";
+import { Database, FileText, Menu, X, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, Sun, Moon, Rocket, Layers, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -15,6 +15,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { label: "Database", href: "/", icon: Database },
     { label: "Raw Files", href: "/raw", icon: FileText },
+    { label: "Training", href: "/training", icon: Rocket },
+    { label: "Models", href: "/models", icon: Layers },
+    { label: "Reports", href: "/reports", icon: ScrollText },
   ];
 
   return (

@@ -1,9 +1,33 @@
 """
 Configuration for database_management module.
-Imports from main settings and can add module-specific configs.
+Imports from main settings and provides backward-compatible names.
 """
 
-from settings.configs import *
+from settings.configs import (
+    DB_TIME_INTERVAL,
+    DB_CHUNK_DURATION,
+    DB_PADDING_DURATION,
+    DB_INTERPOLATION_KIND,
+    DB_INTERPOLATION_BOUNDS_ERROR,
+    DB_INTERPOLATION_FILL_VALUE,
+    DB_AUTO_DETECT_ENABLED,
+    DB_RECURSIVE_SEARCH,
+    DB_COPY_RAW_DATA,
+    DB_GENERATE_METADATA,
+    DB_APPEND_MODE,
+)
+
+# Backward-compatible names (without DB_ prefix)
+TIME_INTERVAL = DB_TIME_INTERVAL
+CHUNK_DURATION = DB_CHUNK_DURATION
+PADDING_DURATION = DB_PADDING_DURATION
+INTERPOLATION_KIND = DB_INTERPOLATION_KIND
+INTERPOLATION_BOUNDS_ERROR = DB_INTERPOLATION_BOUNDS_ERROR
+INTERPOLATION_FILL_VALUE = DB_INTERPOLATION_FILL_VALUE
+AUTO_DETECT_ENABLED = DB_AUTO_DETECT_ENABLED
+RECURSIVE_SEARCH = DB_RECURSIVE_SEARCH
+COPY_RAW_DATA = DB_COPY_RAW_DATA
+GENERATE_METADATA = DB_GENERATE_METADATA
+APPEND_MODE = DB_APPEND_MODE
 
 # Module-specific configs can be added here if needed
-# For now, we just import everything from main settings

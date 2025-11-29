@@ -11,6 +11,10 @@ backend/database/*
 backend/raw_database/*
 !backend/raw_database/.gitkeep
 
+# Trained models (keep structure, ignore model files)
+backend/models/*
+!backend/models/.gitkeep
+
 # Environment files (secrets)
 .env
 .env.*

@@ -1,4 +1,4 @@
-# Claude AI Context - Sensor Data Management System
+# Sensor Data Management System - Project Context
 
 ## Project Overview
 A full-stack application for managing and visualizing sensor data with features for data import, processing, visualization, and download capabilities.
@@ -97,7 +97,8 @@ Backend allows origins: localhost:5000, localhost:5001, localhost:5173
 │   │   └── components/
 │   │       └── add-data-modal.tsx # Import dialog
 │   └── vite.config.ts            # Proxy config
-└── claude.md                     # This file
+├── CLAUDE.md                     # Claude Code dev instructions
+└── claude_context.md             # This file (project context)
 ```
 
 ## API Endpoints

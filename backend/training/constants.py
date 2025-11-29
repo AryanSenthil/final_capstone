@@ -1,0 +1,26 @@
+"""
+Constants for training module.
+Imports from main settings and provides backward-compatible names.
+"""
+
+from settings.constants import (
+    TRAINING_TIME_PERIOD,
+    TRAINING_SAMPLING_RATE,
+    TRAINING_INTERPOLATION_KIND,
+    TRAINING_INTERPOLATION_FILL_VALUE,
+    TRAINING_RECURSIVE_SEARCH,
+    FRAME_LENGTH,
+    FRAME_STEP,
+    SEED,
+    VALIDATION_SPLIT,
+    BATCH_SIZE,
+)
+
+# Backward-compatible names (without TRAINING_ prefix)
+TIME_PERIOD = TRAINING_TIME_PERIOD
+SAMPLING_RATE = TRAINING_SAMPLING_RATE
+INTERPOLATION_KIND = TRAINING_INTERPOLATION_KIND
+INTERPOLATION_FILL_VALUE = TRAINING_INTERPOLATION_FILL_VALUE
+RECURSIVE_SEARCH = TRAINING_RECURSIVE_SEARCH
+
+# Module-specific constants can be added here if needed

@@ -6,18 +6,14 @@ Contains AI tools for data structure detection and metadata generation.
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from datetime import datetime
 from openai import OpenAI
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
-from .constants import (
-    MAX_PREVIEW_ROWS, GPT_MODEL, GPT_MAX_TOKENS,
-    DEFAULT_TIME_COLUMN, DEFAULT_VALUES_COLUMN,
-    DEFAULT_SKIP_ROWS, DEFAULT_VALUES_LABEL
-)
+from settings.constants import MAX_PREVIEW_ROWS, OPENAI_MODEL
 
 # Load environment variables from .env file
 load_dotenv()
@@ -73,7 +69,7 @@ Respond with ONLY a JSON object (no markdown, no explanation):
 
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     response = client.responses.create(
-        model=GPT_MODEL,
+        model=OPENAI_MODEL,
         input=prompt
     )
     

@@ -1,0 +1,1 @@
+Read the CLAUDE.md file in the project root to understand the dev server configuration, then start both development servers (backend and frontend) in parallel according to the instructions in that file.

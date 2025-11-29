@@ -1,0 +1,172 @@
+import { useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { FileText, Search, Filter, Download, MoreVertical, ChevronDown, Loader2, ScrollText } from "lucide-react";
+import { ReportModal } from "@/components/training/ReportModal";
+import { useState } from "react";
+import { Link } from "wouter";
+
+interface Report {
+  id: string;
+  name: string;
+  size: string;
+  date: string;
+  model_name: string;
+  path: string;
+}
+
+export default function ReportsPage() {
+  const [showReport, setShowReport] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const { data: reports = [], isLoading } = useQuery<Report[]>({
+    queryKey: ["/api/reports"],
+  });
+
+  const filteredReports = reports.filter(report =>
+    report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    report.model_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleViewReport = (report: Report) => {
+    setSelectedReport(report);
+    setShowReport(true);
+  };
+
+  const handleDownload = async (report: Report, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const response = await fetch(`/api/training/report/download?path=${encodeURIComponent(report.path)}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = report.name;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+      }
+    } catch (error) {
+      console.error('Failed to download report:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-end justify-between">
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold tracking-tighter text-foreground">Reports Library</h1>
+          <p className="text-muted-foreground text-lg">Centralized archive of all experiment documentation.</p>
+        </div>
+        <Button className="gap-2 rounded-xl shadow-lg shadow-primary/20">
+          <Download size={18} /> Export All
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-4 bg-white dark:bg-zinc-900 p-2 rounded-2xl border shadow-sm ring-1 ring-black/5">
+         <div className="relative flex-1">
+           <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
+           <Input
+             placeholder="Search filenames, models..."
+             className="pl-10 h-10 bg-transparent border-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
+             value={searchQuery}
+             onChange={(e) => setSearchQuery(e.target.value)}
+           />
+         </div>
+         <div className="h-6 w-px bg-border mx-2" />
+         <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground rounded-xl">
+           <Filter size={16} />
+           Filter
+           <ChevronDown size={12} className="opacity-50" />
+         </Button>
+      </div>
+
+      {filteredReports.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <h3 className="text-lg font-semibold mb-2">No Reports Yet</h3>
+          <p className="text-sm">Train a model with report generation enabled to see reports here.</p>
+          <Link href="/training">
+            <Button className="mt-4">Go to Training</Button>
+          </Link>
+        </div>
+      ) : (
+        <div className="rounded-2xl border bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm shadow-sm overflow-hidden">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="hover:bg-transparent border-b border-border/60">
+                <TableHead className="w-[450px] py-4 pl-6 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Filename</TableHead>
+                <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Model</TableHead>
+                <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Generated</TableHead>
+                <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Size</TableHead>
+                <TableHead className="py-4 pr-6 text-right text-xs uppercase tracking-wider font-semibold text-muted-foreground">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredReports.map((report) => (
+                <TableRow
+                  key={report.id}
+                  className="group cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors border-border/40"
+                  onClick={() => handleViewReport(report)}
+                >
+                  <TableCell className="py-4 pl-6">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-blue-100 dark:bg-blue-500/20 p-2.5 rounded-xl text-blue-600 dark:text-blue-400 shadow-sm group-hover:scale-105 transition-transform">
+                        <FileText size={20} />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-sm text-foreground group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{report.name}</span>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground font-medium">{report.model_name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground font-medium">{report.date}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded w-fit">{report.size}</TableCell>
+                  <TableCell className="text-right pr-6">
+                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                        onClick={(e) => handleDownload(report, e)}
+                      >
+                        <Download size={16} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:bg-muted"
+                        onClick={(e) => { e.stopPropagation(); }}
+                      >
+                        <MoreVertical size={16} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <ReportModal
+        open={showReport}
+        onOpenChange={setShowReport}
+        modelName={selectedReport?.model_name}
+        reportPath={selectedReport?.path}
+      />
+    </div>
+  );
+}
