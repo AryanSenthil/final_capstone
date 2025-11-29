@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderSelector, type FolderSelection } from "@/components/training/FolderSelector";
 import { ArchitectureSelector, type ArchitectureType } from "@/components/training/ArchitectureSelector";
 import { TrainingProgress, type TrainingStatus } from "@/components/training/TrainingProgress";
@@ -7,7 +7,7 @@ import { GraphCarousel } from "@/components/training/GraphCarousel";
 import { ReportModal } from "@/components/training/ReportModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Rocket, Square, FileText, RotateCcw, AlertCircle, CheckCircle2, Type, Download, Activity } from "lucide-react";
+import { Rocket, Square, FileText, RotateCcw, AlertCircle, CheckCircle2, Type, Download, Activity, Wand2, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,31 @@ interface TrainingResult {
   loss: string;
   model_path: string;
   report_path: string | null;
+}
+
+interface TrainingStateResponse {
+  model_name: string;
+  selected_labels: string[];
+  architecture: string;
+  last_updated: string;
+  // Persisted training result
+  status: TrainingStatus;
+  job_id: string | null;
+  result: TrainingResult | null;
+}
+
+interface DatasetMetadata {
+  id: string;
+  label: string;
+  chunks: number;
+  measurement: string;
+  unit: string;
+}
+
+interface GraphData {
+  accuracy?: string;
+  loss?: string;
+  confusion_matrix?: string;
 }
 
 export default function TrainingPage() {
@@ -33,7 +58,104 @@ export default function TrainingPage() {
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const [currentEpoch, setCurrentEpoch] = useState<number | undefined>();
   const [totalEpochs, setTotalEpochs] = useState<number | undefined>();
+  const [stateLoaded, setStateLoaded] = useState(false);
+  const [graphs, setGraphs] = useState<GraphData | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const queryClient = useQueryClient();
+
+  // Load saved training state - track isFetching to avoid cache issues
+  const { data: savedState, isFetching: isFetchingState } = useQuery<TrainingStateResponse>({
+    queryKey: ["/api/training/state"],
+    staleTime: 0, // Always refetch when component mounts
+    refetchOnMount: "always",
+  });
+
+  // Load labels for restoring selections
+  const { data: labels } = useQuery<DatasetMetadata[]>({
+    queryKey: ["/api/labels"],
+  });
+
+  // Restore state from backend on mount - WAIT for fresh data (not cached)
+  useEffect(() => {
+    // Must wait for isFetching to be false to ensure we have fresh data, not stale cache
+    if (!isFetchingState && savedState && labels && !stateLoaded) {
+      if (savedState.model_name) {
+        setModelName(savedState.model_name);
+      }
+      if (savedState.architecture) {
+        setArchitecture(savedState.architecture as ArchitectureType);
+      }
+      if (savedState.selected_labels && savedState.selected_labels.length > 0) {
+        // Restore folder selections from labels
+        const restored = savedState.selected_labels
+          .map(labelName => {
+            const labelData = labels.find(l => l.label === labelName);
+            if (labelData) {
+              return {
+                path: labelData.label,
+                name: labelData.label,
+                fileCount: labelData.chunks,
+                selected: true,
+                metadata: labelData,
+              } as FolderSelection;
+            }
+            return null;
+          })
+          .filter(Boolean) as FolderSelection[];
+        if (restored.length > 0) {
+          setSelectedFolders(restored);
+        }
+      }
+      // Restore completed training state
+      if (savedState.status === "complete" && savedState.result) {
+        setStatus("complete");
+        setCurrentStep(4);
+        setTrainingResult(savedState.result);
+        setJobId(savedState.job_id);
+        // Fetch graphs for completed model
+        const fetchGraphs = async () => {
+          try {
+            const graphsResponse = await fetch(`/api/models/${encodeURIComponent(savedState.model_name)}/graphs`);
+            if (graphsResponse.ok) {
+              const graphsData = await graphsResponse.json();
+              setGraphs(graphsData);
+            }
+          } catch (e) {
+            console.error("Failed to fetch graphs:", e);
+          }
+        };
+        fetchGraphs();
+      }
+      setStateLoaded(true);
+    }
+  }, [isFetchingState, savedState, labels, stateLoaded]);
+
+  // Backend saves state when training completes - no frontend save needed
+
+  // Generate model name mutation
+  const generateNameMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/suggest-model-name", {
+        labels: selectedFolders.map(f => f.name),
+        architecture: architecture,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.name) {
+        setModelName(data.name);
+        setModelNameError(false);
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Could not generate name",
+        description: "Please enter a name manually.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    },
+  });
 
   // Start training mutation
   const startMutation = useMutation({
@@ -94,6 +216,18 @@ export default function TrainingPage() {
               if (pollingRef.current) {
                 clearInterval(pollingRef.current);
               }
+              // Fetch model graphs
+              try {
+                const graphsResponse = await fetch(`/api/models/${encodeURIComponent(modelName)}/graphs`);
+                if (graphsResponse.ok) {
+                  const graphsData = await graphsResponse.json();
+                  setGraphs(graphsData);
+                }
+              } catch (e) {
+                console.error("Failed to fetch graphs:", e);
+              }
+              // Backend saves state when training completes - invalidate query to get fresh state
+              queryClient.invalidateQueries({ queryKey: ["/api/training/state"] });
             } else if (data.status === "error") {
               setStatus("error");
               toast({
@@ -167,7 +301,7 @@ export default function TrainingPage() {
     });
   };
 
-  const resetTraining = () => {
+  const resetTraining = async () => {
     setStatus("idle");
     setCurrentStep(0);
     setModelName("");
@@ -175,65 +309,132 @@ export default function TrainingPage() {
     setTrainingResult(null);
     setCurrentEpoch(undefined);
     setTotalEpochs(undefined);
+    setGraphs(null);
+    setSelectedFolders([]);
+    // Clear persisted state when starting new run
+    try {
+      await fetch("/api/training/state", { method: "DELETE" });
+    } catch {}
+  };
+
+  const handleDownloadReport = async () => {
+    if (!trainingResult?.report_path) {
+      toast({
+        title: "No Report Available",
+        description: "Report has not been generated yet.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Extract filename from report_path
+      const filename = trainingResult.report_path.split('/').pop() || 'report.pdf';
+
+      // Fetch the report PDF from the API using query parameter
+      const response = await fetch(`/api/training/report/download?path=${encodeURIComponent(trainingResult.report_path)}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to download report');
+      }
+
+      // Get the blob and create a download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Download Started",
+        description: `Downloading ${filename}`,
+        duration: 3000,
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Could not download the report. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] -m-4 sm:-m-6">
-      {/* LEFT PANEL (Configuration) */}
-      <div className="w-full lg:w-[420px] xl:w-[460px] flex-shrink-0 border-r border-border bg-background flex flex-col h-full overflow-y-auto lg:overflow-hidden z-10 shadow-xl shadow-black/5">
-        <div className="p-6 flex flex-col h-full gap-6">
-          {/* Header */}
-          <div className="shrink-0 space-y-1 pb-2 border-b border-border/50">
-             <h2 className="text-xl font-bold tracking-tight">Experiment Setup</h2>
-             <p className="text-xs text-muted-foreground">Define parameters for new run</p>
-          </div>
-
-          {/* Scrollable Configuration Area */}
-          <div className="flex-1 overflow-y-auto pr-2 space-y-6 min-h-0 py-2">
-
-            {/* Model Name Input */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                   <Type size={12} /> Model Identifier
-                 </h3>
-                 {modelNameError && <span className="text-xs text-destructive font-medium">Required</span>}
-              </div>
-              <Input
-                placeholder="e.g., resnet50_batch_v2"
-                value={modelName}
-                onChange={(e) => {
-                  setModelName(e.target.value);
-                  if (e.target.value) setModelNameError(false);
-                }}
-                className={cn(
-                  "transition-all",
-                  modelNameError ? "border-destructive ring-destructive/20" : "focus-visible:ring-primary/20"
-                )}
-                disabled={status === "training"}
-              />
+    <div className="flex h-[calc(100vh-2rem)] -m-4 sm:-m-6 lg:-m-6">
+      {/* MAIN CONTENT - Single column layout */}
+      <div className="flex-1 flex flex-col lg:flex-row bg-background overflow-hidden">
+        {/* LEFT PANEL (Configuration + Status) */}
+        <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 border-r border-border bg-background flex flex-col h-full z-10">
+          <div className="p-4 flex flex-col h-full gap-3 overflow-y-auto">
+            {/* Header - Simple */}
+            <div className="shrink-0 pb-2 border-b border-border/50">
+               <h2 className="text-lg font-bold tracking-tight">Train Model</h2>
+               <p className="text-[10px] text-muted-foreground">Configure and start training</p>
             </div>
 
-            <div className="space-y-2">
+            {/* Model Name Input - Compact */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                 <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                   <Type size={10} /> Model Name
+                 </h3>
+                 {modelNameError && <span className="text-[10px] text-destructive font-medium">Required</span>}
+              </div>
+              <div className="flex gap-1.5">
+                <Input
+                  value={modelName}
+                  onChange={(e) => {
+                    setModelName(e.target.value);
+                    if (e.target.value) setModelNameError(false);
+                  }}
+                  className={cn(
+                    "transition-all flex-1 h-8 text-sm",
+                    modelNameError ? "border-destructive ring-destructive/20" : "focus-visible:ring-primary/20"
+                  )}
+                  disabled={status === "training"}
+                  placeholder="Enter model name..."
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={() => generateNameMutation.mutate()}
+                  disabled={selectedFolders.length === 0 || generateNameMutation.isPending || status === "training"}
+                  title="Generate name using AI"
+                  className="h-8 w-8 shrink-0"
+                >
+                  {generateNameMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3 w-3" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Dataset Selection - Compact */}
+            <div className="space-y-1.5">
               <FolderSelector
                 selectedFolders={selectedFolders}
                 onSelectionChange={setSelectedFolders}
               />
             </div>
 
-            <div className="h-px bg-border/60 w-full" />
-
-            <div className="space-y-2">
+            {/* Architecture Selection - Compact */}
+            <div className="space-y-1.5">
               <ArchitectureSelector
                 selected={architecture}
                 onChange={setArchitecture}
               />
             </div>
 
-            <div className="h-px bg-border/60 w-full" />
-
-            <div className="space-y-3">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Status Monitor</h3>
+            {/* Training Progress - Compact */}
+            <div className="space-y-1.5 pt-2 border-t border-border/50">
+              <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</h3>
               <TrainingProgress
                 status={status}
                 currentStep={currentStep}
@@ -241,160 +442,97 @@ export default function TrainingPage() {
                 totalEpochs={totalEpochs}
               />
             </div>
-          </div>
 
-          {/* Fixed Footer Actions */}
-          <div className="shrink-0 pt-4 mt-auto">
-            {status === "idle" && (
-              <Button
-                size="lg"
-                className="w-full gap-3 shadow-lg shadow-primary/20 h-12 text-base font-semibold rounded-lg transition-all hover:translate-y-[-1px]"
-                onClick={startTraining}
-                disabled={selectedFolders.length === 0 || startMutation.isPending}
+            {/* Success Banner with Report Actions */}
+            {status === "complete" && trainingResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-emerald-500 text-white p-3 rounded-lg shadow-md"
               >
-                <Rocket size={18} />
-                {startMutation.isPending ? "Starting..." : "Start Training"}
-              </Button>
-            )}
-
-            {status === "training" && (
-              <Button
-                size="lg"
-                variant="destructive"
-                className="w-full gap-3 h-12 text-base font-semibold rounded-lg shadow-lg shadow-destructive/20"
-                onClick={stopTraining}
-              >
-                <Square size={18} fill="currentColor" />
-                Stop Training
-              </Button>
-            )}
-
-            {(status === "complete" || status === "error") && (
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="flex-1 gap-2 h-12 text-base font-semibold rounded-lg border-primary/20 hover:bg-primary/5 hover:text-primary"
-                    onClick={resetTraining}
-                  >
-                    <RotateCcw size={18} />
-                    Start New Run
-                  </Button>
-
-                  {status === "complete" && trainingResult?.report_path && (
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 size={16} />
+                  <span className="font-semibold text-sm">Training Complete</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-white/90 mb-3">
+                  <span>Accuracy: {trainingResult.accuracy}</span>
+                  <span>Loss: {trainingResult.loss}</span>
+                </div>
+                {trainingResult.report_path && (
+                  <div className="flex gap-2">
                     <Button
-                      size="lg"
-                      className="flex-1 gap-2 h-12 text-base font-semibold rounded-lg shadow-lg shadow-primary/10"
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1 h-8 text-xs bg-white/20 hover:bg-white/30 text-white border-0"
                       onClick={() => setShowReport(true)}
                     >
-                      <FileText size={18} />
+                      <FileText size={12} className="mr-1.5" />
                       View Report
                     </Button>
-                  )}
-                </div>
-              </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white border-0 p-0"
+                      onClick={handleDownloadReport}
+                      title="Download Report"
+                    >
+                      <Download size={12} />
+                    </Button>
+                  </div>
+                )}
+              </motion.div>
             )}
+
+            {/* Action Buttons - Fixed at bottom */}
+            <div className="shrink-0 mt-auto pt-3 space-y-2">
+              {status === "idle" && (
+                <Button
+                  size="default"
+                  className="w-full gap-2 shadow-lg shadow-primary/20 h-10 text-sm font-semibold rounded-lg transition-all hover:translate-y-[-1px]"
+                  onClick={startTraining}
+                  disabled={selectedFolders.length === 0 || startMutation.isPending}
+                >
+                  <Rocket size={16} />
+                  {startMutation.isPending ? "Starting..." : "Start Training"}
+                </Button>
+              )}
+
+              {status === "training" && (
+                <Button
+                  size="default"
+                  variant="destructive"
+                  className="w-full gap-2 h-10 text-sm font-semibold rounded-lg shadow-lg shadow-destructive/20"
+                  onClick={stopTraining}
+                >
+                  <Square size={16} fill="currentColor" />
+                  Stop Training
+                </Button>
+              )}
+
+              {(status === "complete" || status === "error") && (
+                <Button
+                  size="default"
+                  variant="outline"
+                  className="w-full gap-1.5 h-10 text-sm font-semibold rounded-lg border-primary/20 hover:bg-primary/5 hover:text-primary"
+                  onClick={resetTraining}
+                >
+                  <RotateCcw size={14} />
+                  Start New Training
+                </Button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* RIGHT PANEL (Visuals) */}
-      <div className="flex-1 bg-secondary/30 flex flex-col relative overflow-hidden">
-         {/* Top Status Banner Area */}
-         <div className="h-20 shrink-0 px-8 pt-6 pb-2 flex items-center justify-between z-20 border-b border-transparent">
-            <div className="flex-1 relative h-14">
-               {/* Placeholder / Empty State */}
-               <div className={cn(
-                 "absolute inset-0 bg-background/40 border border-border/50 rounded-lg flex items-center px-6 transition-opacity duration-300",
-                 status === "idle" || status === "training" ? "opacity-100" : "opacity-0 pointer-events-none"
-               )}>
-                  <div className="flex items-center gap-3 text-muted-foreground/50">
-                     <Activity size={18} />
-                     <span className="text-sm font-medium">
-                       {status === "idle" ? "Ready for training sequence" : "Training in progress..."}
-                     </span>
-                  </div>
-               </div>
-
-               <AnimatePresence mode="wait">
-                  {status === "complete" && trainingResult && (
-                     <motion.div
-                       initial={{ opacity: 0, y: 10 }}
-                       animate={{ opacity: 1, y: 0 }}
-                       exit={{ opacity: 0, y: -10 }}
-                       className="absolute inset-0 bg-emerald-500 text-white px-6 rounded-lg shadow-lg flex items-center justify-between gap-4 w-full"
-                     >
-                       <div className="flex items-center gap-4">
-                         <div className="bg-white/20 p-1.5 rounded-full">
-                           <CheckCircle2 size={20} className="text-white" />
-                         </div>
-                         <div>
-                           <h3 className="font-bold text-sm">Training Successful</h3>
-                           <p className="text-xs text-white/90">
-                             Accuracy: {trainingResult.accuracy} | Loss: {trainingResult.loss}
-                           </p>
-                         </div>
-                       </div>
-
-                       <div className="flex items-center gap-2">
-                         {trainingResult.report_path && (
-                           <Button
-                             size="sm"
-                             variant="ghost"
-                             className="text-white hover:bg-white/20 h-8 px-3 border border-white/20"
-                             onClick={() => setShowReport(true)}
-                           >
-                             <FileText size={14} className="mr-2" /> View Report
-                           </Button>
-                         )}
-                         <Button
-                           size="sm"
-                           variant="ghost"
-                           className="text-white hover:bg-white/20 h-8 px-3 border border-white/20"
-                         >
-                           <Download size={14} className="mr-2" /> Download
-                         </Button>
-                       </div>
-                     </motion.div>
-                  )}
-
-                  {status === "error" && (
-                     <motion.div
-                       initial={{ opacity: 0, y: 10 }}
-                       animate={{ opacity: 1, y: 0 }}
-                       exit={{ opacity: 0, y: -10 }}
-                       className="absolute inset-0 bg-destructive text-white px-6 rounded-lg shadow-lg flex items-center gap-4 w-full"
-                     >
-                       <div className="bg-white/20 p-1.5 rounded-full">
-                         <AlertCircle size={20} className="text-white" />
-                       </div>
-                       <div>
-                         <h3 className="font-bold text-sm">Training Failed</h3>
-                         <p className="text-xs text-white/90">Check console for details</p>
-                       </div>
-                     </motion.div>
-                  )}
-               </AnimatePresence>
+        {/* RIGHT PANEL (Graphs) - Only visible when there's data */}
+        <div className="flex-1 bg-secondary/30 flex flex-col relative overflow-hidden">
+          {/* Graph Area */}
+          <div className="flex-1 p-4 lg:p-6 overflow-y-auto">
+            <div className="bg-card rounded-xl border shadow-sm h-full p-4 lg:p-6 flex flex-col max-w-5xl mx-auto relative">
+              <GraphCarousel hasData={status === "complete"} graphs={graphs || undefined} />
             </div>
-
-            {/* Run ID Display */}
-            <div className="ml-4">
-               <div
-                 className="text-muted-foreground font-mono text-sm bg-background/50 px-3 py-2 rounded border border-border/50 backdrop-blur h-14 flex items-center"
-               >
-                 <span className="text-xs text-muted-foreground mr-2">ID:</span>
-                 {modelName || "—"}
-               </div>
-            </div>
-         </div>
-
-         {/* Main Graph Area */}
-         <div className="flex-1 p-6 lg:p-8 pt-2 overflow-y-auto">
-           <div className="bg-card rounded-2xl border shadow-sm h-full p-6 lg:p-8 flex flex-col max-w-7xl mx-auto relative">
-              <GraphCarousel hasData={status === "complete"} />
-           </div>
-         </div>
+          </div>
+        </div>
       </div>
 
       <ReportModal

@@ -92,11 +92,19 @@ export function AddDataModal() {
     ];
 
     let currentStage = 0;
+    let slowProgress = 90;
     progressIntervalRef.current = setInterval(() => {
       if (currentStage < stages.length) {
         setProgress(stages[currentStage].progress);
         setProcessingStage(stages[currentStage].stage);
         currentStage++;
+      } else {
+        // Continue slow progress from 90 to 99 (never reach 100 on our own)
+        if (slowProgress < 99) {
+          slowProgress += 0.5;
+          setProgress(Math.min(slowProgress, 99));
+          setProcessingStage("Processing... please wait");
+        }
       }
     }, 1500);
   };
@@ -127,10 +135,27 @@ export function AddDataModal() {
     },
     onSuccess: (data) => {
       if (data.success && data.label) {
-        form.setValue("label", data.label);
+        form.setValue("label", data.label, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true
+        });
+        toast({
+          title: "Label Generated",
+          description: `Suggested label: ${data.label}`,
+          duration: 3000,
+        });
+      } else {
+        toast({
+          title: "Could not generate label",
+          description: data.message || "Please enter a label manually.",
+          variant: "destructive",
+          duration: 3000,
+        });
       }
     },
-    onError: () => {
+    onError: (error: Error) => {
+      console.error("Suggest label error:", error);
       toast({
         title: "Could not generate label",
         description: "Please enter a label manually.",
@@ -150,24 +175,59 @@ export function AddDataModal() {
       return response.json();
     },
     onSuccess: (data) => {
-      // Wait for backend processing to complete before showing success
-      // The progress bar will continue showing during this time
-      setTimeout(() => {
-        stopProgressSimulation(true);
-        setTimeout(() => {
-          setOpen(false);
-          setShowBrowser(false);
-          form.reset();
-          // Immediately refresh the data lists
-          queryClient.invalidateQueries({ queryKey: ["/api/labels"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/raw-database"] });
-          toast({
-            title: "Data Processed Successfully",
-            description: data.message || `Data for label "${form.getValues("label")}" has been processed.`,
-            duration: 5000,
-          });
-        }, 1500);
-      }, 8000); // Wait 8 seconds for backend processing
+      // Poll for the label to appear in the database (up to 60 seconds)
+      const labelToCheck = form.getValues("label");
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds max
+
+      const pollForCompletion = async () => {
+        attempts++;
+        try {
+          const response = await fetch(`/api/labels/${encodeURIComponent(labelToCheck)}`);
+          if (response.ok) {
+            // Label exists - processing complete!
+            stopProgressSimulation(true);
+            setTimeout(() => {
+              setOpen(false);
+              setShowBrowser(false);
+              form.reset();
+              queryClient.invalidateQueries({ queryKey: ["/api/labels"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/raw-database"] });
+              toast({
+                title: "Data Processed Successfully",
+                description: data.message || `Data for label "${labelToCheck}" has been processed.`,
+                duration: 5000,
+              });
+            }, 1500);
+            return;
+          }
+        } catch (e) {
+          // Label not ready yet
+        }
+
+        if (attempts < maxAttempts) {
+          // Keep polling
+          setTimeout(pollForCompletion, 2000);
+        } else {
+          // Timeout - assume it worked since API returned 200
+          stopProgressSimulation(true);
+          setTimeout(() => {
+            setOpen(false);
+            setShowBrowser(false);
+            form.reset();
+            queryClient.invalidateQueries({ queryKey: ["/api/labels"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/raw-database"] });
+            toast({
+              title: "Processing Initiated",
+              description: "Data processing has started. It may take a moment to appear.",
+              duration: 5000,
+            });
+          }, 1500);
+        }
+      };
+
+      // Start polling after a short delay
+      setTimeout(pollForCompletion, 3000);
     },
     onError: (error: Error) => {
       stopProgressSimulation(false);
@@ -191,7 +251,11 @@ export function AddDataModal() {
   };
 
   const handleSelectFolder = (path: string) => {
-    form.setValue("folderPath", path);
+    form.setValue("folderPath", path, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true
+    });
     setShowBrowser(false);
     setCurrentPath("");
   };
@@ -252,11 +316,13 @@ export function AddDataModal() {
               <Progress value={progress} className="h-3" />
             </div>
 
-            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Folder className="h-4 w-4 text-blue-500" />
-                <span className="text-muted-foreground">Folder:</span>
-                <code className="text-xs bg-background px-2 py-1 rounded truncate max-w-[400px]">
+            <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex items-center gap-2">
+                  <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                  <span className="text-muted-foreground">Folder:</span>
+                </div>
+                <code className="text-xs bg-background px-2 py-1.5 rounded break-all ml-6 block w-full overflow-x-auto whitespace-pre-wrap" title={form.getValues("folderPath")}>
                   {form.getValues("folderPath")}
                 </code>
               </div>
@@ -272,6 +338,21 @@ export function AddDataModal() {
             <p className="text-xs text-center text-muted-foreground">
               Processing runs in the background. You'll be notified when complete.
             </p>
+
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  stopProgressSimulation(false);
+                  setOpen(false);
+                  form.reset();
+                }}
+                className="gap-2"
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         ) : showBrowser ? (
           <div className="space-y-4">

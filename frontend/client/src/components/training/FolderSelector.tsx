@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Folder, X, UploadCloud, Loader2, Database, Clock, FileText, Activity, Sparkles, Info, TrendingUp, TrendingDown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -67,6 +67,7 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
   const [tempSelection, setTempSelection] = useState<FolderSelection[]>([]);
   const [expandedFolder, setExpandedFolder] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const [isCompact] = useState(true); // Compact mode for narrower panels
 
   // Fetch available labels/folders from the API with full metadata
   const { data: labels, isLoading } = useQuery<DatasetMetadata[]>({
@@ -109,6 +110,14 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
   // Check if any labels are missing AI metadata
   const labelsWithoutMetadata = tempSelection.filter(f => !f.metadata?.description).length;
 
+  // Auto-generate metadata when dialog opens if there are labels without metadata
+  useEffect(() => {
+    if (isOpen && labelsWithoutMetadata > 0 && !generateAllMetadataMutation.isPending) {
+      // Auto-trigger batch metadata generation
+      generateAllMetadataMutation.mutate();
+    }
+  }, [isOpen, labelsWithoutMetadata]);
+
   const handleOpenChange = (open: boolean) => {
     if (open && labels) {
       const currentPaths = new Set(selectedFolders.map(f => f.path));
@@ -140,69 +149,59 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Dataset Selection</h3>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+          <Folder size={10} /> Training Data
+        </h3>
+        {selectedFolders.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">{selectedFolders.length} selected</span>
+        )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/20">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 text-primary rounded-lg shrink-0">
-              <Folder size={20} />
+      <div className="rounded-lg border border-border bg-card p-2.5 shadow-sm transition-all hover:border-primary/20">
+        <div className="flex flex-col gap-2">
+          {/* Selected datasets - compact badges */}
+          {selectedFolders.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 bg-muted/30 p-1.5 rounded border border-border/50 min-h-[32px]">
+              {selectedFolders.map((folder) => (
+                <TooltipProvider key={folder.path}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="secondary"
+                        className="pl-2 pr-1 py-0.5 h-6 text-[11px] flex items-center gap-1 group hover:bg-destructive/10 hover:text-destructive transition-colors bg-background border shadow-sm cursor-default"
+                      >
+                        <span className="truncate max-w-[80px] font-medium">{folder.name}</span>
+                        <span className="text-muted-foreground text-[9px]">({folder.fileCount})</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeFolder(folder.path); }}
+                          className="ml-0.5 rounded-full hover:bg-destructive/20 p-0.5 transition-colors"
+                        >
+                          <X size={10} />
+                        </button>
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {folder.metadata?.measurement} ({folder.metadata?.unit}) - {folder.metadata?.folderSize}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
             </div>
-            <div>
-              <h4 className="text-sm font-medium">Training Data</h4>
-              <p className="text-xs text-muted-foreground">Select classification labels to train on</p>
-            </div>
-          </div>
+          )}
 
-          <div className="min-w-0 space-y-3">
-             {selectedFolders.length > 0 && (
-               <div className="space-y-2">
-                 {/* Selected datasets badges */}
-                 <div className="flex flex-wrap gap-2 bg-muted/30 p-2 rounded-lg border border-border/50 min-h-[40px]">
-                   {selectedFolders.map((folder) => (
-                     <TooltipProvider key={folder.path}>
-                       <Tooltip>
-                         <TooltipTrigger asChild>
-                           <Badge
-                             variant="secondary"
-                             className="pl-2.5 pr-1.5 py-1 h-7 text-xs flex items-center gap-1.5 group hover:bg-destructive/10 hover:text-destructive transition-colors bg-background border shadow-sm cursor-default"
-                           >
-                             <span className="truncate max-w-[100px] font-medium">{folder.name}</span>
-                             <span className="text-muted-foreground text-[10px]">({folder.fileCount})</span>
-                             <button
-                               onClick={(e) => { e.stopPropagation(); removeFolder(folder.path); }}
-                               className="ml-0.5 rounded-full hover:bg-destructive/20 p-0.5 transition-colors"
-                             >
-                               <X size={12} />
-                             </button>
-                           </Badge>
-                         </TooltipTrigger>
-                         <TooltipContent side="top" className="text-xs">
-                           {folder.metadata?.measurement} ({folder.metadata?.unit}) - {folder.metadata?.folderSize}
-                         </TooltipContent>
-                       </Tooltip>
-                     </TooltipProvider>
-                   ))}
-                 </div>
-
-                 {/* Summary stats for selected datasets */}
-                 <DatasetSummary folders={selectedFolders} />
-               </div>
-             )}
-
-             <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className={cn(
-                  "w-full h-9 text-sm border-dashed hover:text-primary hover:border-primary/30 transition-all",
-                  selectedFolders.length === 0 ? "text-muted-foreground" : "text-foreground"
-                )}>
-                  <UploadCloud className="mr-2 h-4 w-4" />
-                  {selectedFolders.length > 0 ? "Modify Selection" : "Choose Labels..."}
-                </Button>
-              </DialogTrigger>
+          {/* Button to open selection dialog */}
+          <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className={cn(
+                "w-full h-8 text-xs border-dashed hover:text-primary hover:border-primary/30 transition-all",
+                selectedFolders.length === 0 ? "text-muted-foreground" : "text-foreground"
+              )}>
+                <UploadCloud className="mr-1.5 h-3 w-3" />
+                {selectedFolders.length > 0 ? "Modify Selection" : "Choose Training Data..."}
+              </Button>
+            </DialogTrigger>
               <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
@@ -349,47 +348,14 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                                   </div>
                                 </div>
 
-                                {/* AI metadata generation button */}
-                                {!folder.metadata.description && (
-                                  <div className="mt-3 pt-3 border-t border-border/50">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="w-full h-8 text-xs gap-2"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        generateMetadataMutation.mutate(folder.path);
-                                      }}
-                                      disabled={generateMetadataMutation.isPending}
-                                    >
-                                      {generateMetadataMutation.isPending ? (
-                                        <Loader2 size={12} className="animate-spin" />
-                                      ) : (
-                                        <Sparkles size={12} />
-                                      )}
-                                      Generate AI Description
-                                    </Button>
-                                  </div>
-                                )}
 
-                                {/* Show AI-generated description and tips */}
-                                {folder.metadata.description && (
-                                  <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
-                                    <div className="flex items-start gap-2 text-xs">
-                                      <Sparkles size={12} className="text-amber-500 mt-0.5 shrink-0" />
-                                      <p className="text-muted-foreground leading-relaxed">
-                                        {folder.metadata.description}
-                                      </p>
-                                    </div>
+                                {/* Show AI-generated architecture suggestion and quality */}
+                                {(folder.metadata.suggestedArchitecture || folder.metadata.qualityScore !== undefined) && (
+                                  <div className="mt-3 pt-3 border-t border-border/50">
                                     <div className="flex flex-wrap items-center gap-2">
                                       {folder.metadata.suggestedArchitecture && (
-                                        <Badge variant="outline" className="text-[10px]">
-                                          Suggested: {folder.metadata.suggestedArchitecture}
-                                        </Badge>
-                                      )}
-                                      {folder.metadata.category && (
-                                        <Badge variant="secondary" className="text-[10px]">
-                                          {folder.metadata.category}
+                                        <Badge variant="outline" className="text-[10px] border-primary text-primary">
+                                          Recommended: {folder.metadata.suggestedArchitecture}
                                         </Badge>
                                       )}
                                       {folder.metadata.qualityScore !== undefined && (
@@ -419,27 +385,14 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                 <DialogFooter className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{tempSelection.filter(f => f.selected).length} of {tempSelection.length} selected</span>
-                    {labelsWithoutMetadata > 0 && (
-                      <span className="text-amber-600">({labelsWithoutMetadata} missing AI metadata)</span>
+                    {generateAllMetadataMutation.isPending && (
+                      <span className="text-primary flex items-center gap-1">
+                        <Loader2 size={10} className="animate-spin" />
+                        Analyzing datasets...
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {labelsWithoutMetadata > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs"
-                        onClick={() => generateAllMetadataMutation.mutate()}
-                        disabled={generateAllMetadataMutation.isPending}
-                      >
-                        {generateAllMetadataMutation.isPending ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : (
-                          <Sparkles size={12} />
-                        )}
-                        Generate All AI Metadata
-                      </Button>
-                    )}
                     <Button onClick={confirmSelection} disabled={tempSelection.filter(f => f.selected).length === 0}>
                       Confirm Selection
                     </Button>
@@ -447,7 +400,6 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
         </div>
       </div>
     </div>

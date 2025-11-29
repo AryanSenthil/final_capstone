@@ -210,6 +210,7 @@ def generate_model_metadata(
     architecture: str,
     test_accuracy: float,
     test_loss: float,
+    training_time: float = 0.0,
     report_path: str = None,
     api_key: str = None,
 ) -> str:
@@ -221,6 +222,7 @@ def generate_model_metadata(
         architecture: Model architecture ("CNN" or "ResNet")
         test_accuracy: Test accuracy (0-1)
         test_loss: Test loss value
+        training_time: Training duration in seconds
         report_path: Path to PDF report (optional)
         api_key: OpenAI API key
 
@@ -236,7 +238,9 @@ def generate_model_metadata(
         "name": name,
         "architecture": architecture,
         "accuracy": test_accuracy,
+        "test_accuracy": test_accuracy,  # Store both for clarity
         "loss": test_loss,
+        "training_time": training_time,
         "created_at": datetime.now().isoformat(),
         "report_path": report_path,
     }

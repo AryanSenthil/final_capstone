@@ -16,8 +16,16 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
+from dotenv import load_dotenv
+from openai import OpenAI
 
 from settings.constants import DATABASE_DIR, RAW_DATABASE_DIR, MODELS_DIR, REPORTS_DIR, METADATA_FILENAME, OPENAI_MODEL
+
+# Load environment variables
+load_dotenv()
+
+# Initialize OpenAI client once
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI(
     title="Damage Lab API",
@@ -159,6 +167,113 @@ def parse_measurement_type(measurement_type: str) -> tuple[str, str]:
         unit = measurement_type.split("(")[1].replace(")", "").strip()
         return measurement, unit
     return measurement_type, ""
+
+
+def generate_ai_metadata_for_label(label_id: str) -> dict:
+    """Generate AI metadata for a label after data processing.
+
+    This is called automatically after ingestion completes.
+    Returns the generated metadata dict or None if generation fails.
+    """
+    label_dir = DATABASE_DIR / label_id
+
+    if not label_dir.exists():
+        print(f"[WARN] Cannot generate AI metadata: label directory not found: {label_id}")
+        return None
+
+    metadata = load_metadata(label_dir)
+    if not metadata:
+        print(f"[WARN] Cannot generate AI metadata: metadata.json not found for: {label_id}")
+        return None
+
+    # Prepare context for GPT
+    processing = metadata.get("processing", {})
+    dataset_info = metadata.get("dataset", {})
+    stats_info = metadata.get("sample_statistics", {})
+    value_range = stats_info.get("value_range", [0, 0])
+
+    context = f"""
+Dataset Label: {label_id}
+Source Folder: {metadata.get("source_folder", "unknown")}
+Data Type: {metadata.get("data_type", "unknown")}
+Measurement Type: {metadata.get("measurement_type", "unknown")}
+
+Processing Parameters:
+- Interpolation Interval: {processing.get("interpolation_interval", "N/A")}
+- Chunk Duration: {processing.get("chunk_duration", "N/A")}s
+- Time Length: {processing.get("time_length", "N/A")}s
+- Interpolation Method: {processing.get("interpolation", "N/A")}
+
+Dataset Statistics:
+- Total Chunks: {dataset_info.get("total_chunks", 0)}
+- Samples per Chunk: {dataset_info.get("samples_per_chunk", 0)}
+- Source Files Count: {dataset_info.get("source_files_count", 0)}
+- Folder Size: {dataset_info.get("folder_size_mb", 0):.2f} MB
+
+Sample Statistics:
+- Original Sampling Rate: {stats_info.get("original_sampling_rate", "N/A")}
+- Value Range: [{value_range[0] if len(value_range) > 0 else 0}, {value_range[1] if len(value_range) > 1 else 0}]
+- Mean: {stats_info.get("value_mean", 0):.4f}
+- Std Dev: {stats_info.get("value_std", 0):.4f}
+"""
+
+    try:
+        client = openai_client
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an AI assistant specialized in analyzing sensor data datasets for machine learning.
+Given dataset metadata, provide:
+1. A concise description (2-3 sentences) explaining what this dataset represents
+2. A category (e.g., "structural_damage", "material_testing", "vibration_analysis", "electrical_signal", etc.)
+3. A quality score (0.0-1.0) based on data completeness, sample size, and statistics
+4. A suggested architecture ("CNN" or "ResNet") based on the data characteristics
+5. 2-3 training tips specific to this dataset
+
+Respond in JSON format:
+{
+    "description": "...",
+    "category": "...",
+    "quality_score": 0.85,
+    "suggested_architecture": "CNN",
+    "training_tips": ["tip1", "tip2", "tip3"]
+}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Analyze this sensor dataset and provide metadata:\n\n{context}"
+                }
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            timeout=60.0
+        )
+
+        result = json.loads(response.choices[0].message.content)
+
+        # Save AI metadata back to the metadata.json file
+        metadata["ai_metadata"] = {
+            "description": result.get("description", ""),
+            "category": result.get("category", ""),
+            "quality_score": result.get("quality_score", 0.5),
+            "suggested_architecture": result.get("suggested_architecture", "CNN"),
+            "training_tips": result.get("training_tips", []),
+            "generated_at": datetime.now().isoformat()
+        }
+
+        metadata_path = label_dir / METADATA_FILENAME
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        print(f"✓ Generated AI metadata for label: {label_id}")
+        return metadata["ai_metadata"]
+
+    except Exception as e:
+        print(f"[WARN] Failed to generate AI metadata for {label_id}: {e}")
+        return None
 
 
 def load_metadata(label_dir: Path) -> Optional[dict]:
@@ -336,7 +451,6 @@ class GenerateMetadataResponse(BaseModel):
 @app.post("/api/labels/{label_id}/generate-metadata", response_model=GenerateMetadataResponse)
 async def generate_label_metadata(label_id: str):
     """Use GPT to generate AI metadata (description, category, quality score, etc.) for a dataset."""
-    from openai import OpenAI
 
     label_dir = DATABASE_DIR / label_id
 
@@ -379,7 +493,7 @@ Sample Statistics:
 """
 
     try:
-        client = OpenAI()
+        client = openai_client
 
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
@@ -455,7 +569,6 @@ async def generate_all_labels_metadata(force: bool = False):
     Args:
         force: If True, regenerate metadata even for labels that already have it.
     """
-    from openai import OpenAI
 
     if not DATABASE_DIR.exists():
         return BatchGenerateMetadataResponse(
@@ -469,7 +582,7 @@ async def generate_all_labels_metadata(force: bool = False):
     skipped_count = 0
     errors = []
 
-    client = OpenAI()
+    client = openai_client
 
     for label_dir in DATABASE_DIR.iterdir():
         if not label_dir.is_dir():
@@ -840,6 +953,11 @@ def run_ingestion(folder_path: str, label: str, time_interval: float, chunk_dura
         configs.DB_PADDING_DURATION = padding
 
         ingest_sensor_data(folder_path, label)
+
+        # Auto-generate AI metadata after ingestion completes
+        print(f"[INFO] Generating AI metadata for label: {label}")
+        generate_ai_metadata_for_label(label)
+
     finally:
         # Restore original configs
         configs.DB_TIME_INTERVAL = original_interval
@@ -884,13 +1002,12 @@ async def ingest_data(request: IngestRequest, background_tasks: BackgroundTasks)
 async def suggest_label(request: SuggestLabelRequest):
     """Use GPT to suggest a classification label based on folder path."""
     import re
-    from openai import OpenAI
 
     folder_path = request.folderPath
     folder_name = Path(folder_path).name
 
     try:
-        client = OpenAI()
+        client = openai_client
 
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
@@ -949,6 +1066,111 @@ Return ONLY the label, nothing else."""
         )
 
 
+class SuggestModelNameRequest(BaseModel):
+    labels: list[str]
+    architecture: str
+
+
+class SuggestModelNameResponse(BaseModel):
+    success: bool
+    name: Optional[str] = None
+    message: Optional[str] = None
+
+
+@app.post("/api/suggest-model-name", response_model=SuggestModelNameResponse)
+async def suggest_model_name(request: SuggestModelNameRequest):
+    """Use GPT to suggest a model name based on labels and architecture."""
+    import re
+
+    # Get existing model names to avoid duplicates
+    existing_names = set()
+    if MODELS_DIR.exists():
+        for model_dir in MODELS_DIR.iterdir():
+            if model_dir.is_dir() and not model_dir.name.startswith('.'):
+                existing_names.add(model_dir.name.lower())
+
+    try:
+        client = openai_client
+
+        # Include existing names in the prompt so GPT avoids them
+        existing_names_str = ", ".join(sorted(existing_names)) if existing_names else "none"
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""You are a helper that generates model names for neural network training.
+Given a list of classification labels and architecture type, create a concise, descriptive model name.
+
+Rules:
+- Use only lowercase letters, numbers, and underscores
+- NO spaces - use underscores instead
+- Keep it short but descriptive (max 30 chars)
+- Include the architecture type abbreviated (cnn, resnet)
+- Include key info from the labels
+- IMPORTANT: Do NOT use any of these existing names: [{existing_names_str}]
+- If your preferred name already exists, append a number like _2, _3, etc.
+- Examples:
+  - labels: ["crushcore", "disbond"], arch: CNN -> "cnn_crushcore_disbond"
+  - labels: ["normal", "impact_severe"], arch: ResNet -> "resnet_impact_classifier"
+  - If "cnn_crushcore_disbond" exists -> "cnn_crushcore_disbond_2"
+
+Return ONLY the model name, nothing else."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Generate a model name for:\nLabels: {request.labels}\nArchitecture: {request.architecture}"
+                }
+            ],
+            temperature=0.3
+        )
+
+        suggested_name = response.choices[0].message.content.strip()
+        # Clean up the name
+        suggested_name = re.sub(r'[^a-zA-Z0-9_]', '_', suggested_name)
+        suggested_name = re.sub(r'_+', '_', suggested_name)
+        suggested_name = suggested_name.strip('_').lower()
+
+        # Double-check: if name still exists, append a number
+        if suggested_name in existing_names:
+            counter = 2
+            base_name = suggested_name
+            while f"{base_name}_{counter}" in existing_names:
+                counter += 1
+            suggested_name = f"{base_name}_{counter}"
+
+        return SuggestModelNameResponse(
+            success=True,
+            name=suggested_name
+        )
+
+    except Exception as e:
+        # Fallback: generate simple name
+        arch_short = request.architecture.lower()[:6]
+        if request.labels:
+            label_part = request.labels[0][:10].lower()
+            name = f"{arch_short}_{label_part}_model"
+        else:
+            name = f"{arch_short}_model"
+
+        name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+
+        # Ensure fallback name is also unique
+        if name in existing_names:
+            counter = 2
+            base_name = name
+            while f"{base_name}_{counter}" in existing_names:
+                counter += 1
+            name = f"{base_name}_{counter}"
+
+        return SuggestModelNameResponse(
+            success=True,
+            name=name,
+            message=f"Used fallback: {str(e)}"
+        )
+
+
 # ============ Training API Models ============
 
 class TrainingRequest(BaseModel):
@@ -991,20 +1213,158 @@ class ReportInfo(BaseModel):
     path: str
 
 
-# In-memory training job tracking
-training_jobs: dict[str, dict] = {}
+# Training job tracking with file-based persistence
+TRAINING_JOBS_FILE = Path(__file__).parent / "training_jobs.json"
+
+# Training state persistence folder - stores everything until user clicks "New Run"
+TRAINING_PERSISTENCE_DIR = Path(__file__).parent / "training_persistence"
+TRAINING_PERSISTENCE_DIR.mkdir(exist_ok=True)
+
+TRAINING_STATE_FILE = TRAINING_PERSISTENCE_DIR / "state.json"
+TRAINING_RESULT_FILE = TRAINING_PERSISTENCE_DIR / "result.json"
+
+
+class TrainingState(BaseModel):
+    model_name: str = ""
+    selected_labels: list[str] = []
+    architecture: str = "CNN"
+    last_updated: str = ""
+    status: str = "idle"  # idle, training, complete, error
+    job_id: str | None = None
+    result: dict | None = None  # accuracy, loss, model_path, report_path
+
+
+def _load_training_state() -> dict:
+    """Load saved training state from disk."""
+    state = {}
+
+    # Load main state
+    if TRAINING_STATE_FILE.exists():
+        try:
+            with open(TRAINING_STATE_FILE) as f:
+                state = json.load(f)
+        except Exception:
+            state = {}
+
+    # Load result separately (in case it's large)
+    if TRAINING_RESULT_FILE.exists():
+        try:
+            with open(TRAINING_RESULT_FILE) as f:
+                result_data = json.load(f)
+                state["result"] = result_data.get("result")
+                state["status"] = result_data.get("status", state.get("status", "idle"))
+                state["job_id"] = result_data.get("job_id", state.get("job_id"))
+        except Exception:
+            pass
+
+    return state
+
+
+def _save_training_state(state: dict):
+    """Save training state to disk."""
+    state["last_updated"] = datetime.now().isoformat()
+
+    # Save result separately
+    result_data = {
+        "result": state.get("result"),
+        "status": state.get("status", "idle"),
+        "job_id": state.get("job_id"),
+        "last_updated": state["last_updated"]
+    }
+    with open(TRAINING_RESULT_FILE, "w") as f:
+        json.dump(result_data, f, indent=2)
+
+    # Save main state (without result to avoid duplication)
+    main_state = {k: v for k, v in state.items() if k != "result"}
+    with open(TRAINING_STATE_FILE, "w") as f:
+        json.dump(main_state, f, indent=2)
+
+
+@app.get("/api/training/state", response_model=TrainingState)
+async def get_training_state():
+    """Get saved training state."""
+    state = _load_training_state()
+    return TrainingState(**state)
+
+
+@app.post("/api/training/state")
+async def save_training_state_endpoint(state: TrainingState):
+    """Save training state for persistence across navigation."""
+    _save_training_state(state.model_dump())
+    return {"success": True}
+
+
+@app.delete("/api/training/state")
+async def clear_training_state():
+    """Clear saved training state - only called when user clicks New Run."""
+    if TRAINING_STATE_FILE.exists():
+        TRAINING_STATE_FILE.unlink()
+    if TRAINING_RESULT_FILE.exists():
+        TRAINING_RESULT_FILE.unlink()
+    return {"success": True}
+
+
+def _load_training_jobs() -> dict[str, dict]:
+    """Load training jobs from disk."""
+    if TRAINING_JOBS_FILE.exists():
+        try:
+            with open(TRAINING_JOBS_FILE) as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_training_jobs(jobs: dict[str, dict]):
+    """Save training jobs to disk."""
+    with open(TRAINING_JOBS_FILE, "w") as f:
+        json.dump(jobs, f, indent=2)
+
+training_jobs: dict[str, dict] = _load_training_jobs()
 
 
 def run_training_job(job_id: str, model_name: str, labels: list[str], architecture: str, generate_report: bool, use_llm: bool):
     """Background task to run training."""
     import threading
+    import tensorflow as tf
     from training import run_training, DataConfig
+    from training.config import CNNConfig, ResNetConfig
+
+    def update_job(updates: dict):
+        """Update job status and persist to disk."""
+        training_jobs[job_id].update(updates)
+        _save_training_jobs(training_jobs)
+
+    # Create epoch progress callback
+    class EpochProgressCallback(tf.keras.callbacks.Callback):
+        """Callback to report epoch progress to the API."""
+
+        def __init__(self, total_epochs: int, update_fn):
+            super().__init__()
+            self.total_epochs = total_epochs
+            self.update_fn = update_fn
+
+        def on_epoch_begin(self, epoch, logs=None):
+            self.update_fn({
+                "current_epoch": epoch + 1,
+                "total_epochs": self.total_epochs,
+                "progress_message": f"Training epoch {epoch + 1}/{self.total_epochs}..."
+            })
+
+        def on_epoch_end(self, epoch, logs=None):
+            acc = logs.get('accuracy', 0) if logs else 0
+            val_acc = logs.get('val_accuracy', 0) if logs else 0
+            self.update_fn({
+                "current_epoch": epoch + 1,
+                "progress_message": f"Epoch {epoch + 1}/{self.total_epochs} - Acc: {acc:.3f}, Val Acc: {val_acc:.3f}"
+            })
 
     try:
         # Update status: preparing
-        training_jobs[job_id]["status"] = "preparing"
-        training_jobs[job_id]["current_step"] = 1
-        training_jobs[job_id]["progress_message"] = "Preparing data..."
+        update_job({
+            "status": "preparing",
+            "current_step": 1,
+            "progress_message": "Preparing data..."
+        })
 
         # Collect all CSV paths from selected labels
         data_paths = []
@@ -1020,17 +1380,36 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         save_dir = str(MODELS_DIR / model_name)
 
+        # Get total epochs from config based on architecture
+        if architecture.lower() == "resnet":
+            config = ResNetConfig()
+        else:
+            config = CNNConfig()
+        total_epochs = config.epochs
+
+        # Update job with actual total epochs
+        update_job({
+            "total_epochs": total_epochs
+        })
+
         # Update status: building
-        training_jobs[job_id]["status"] = "building"
-        training_jobs[job_id]["current_step"] = 2
-        training_jobs[job_id]["progress_message"] = "Building model..."
+        update_job({
+            "status": "building",
+            "current_step": 2,
+            "progress_message": "Building model..."
+        })
+
+        # Create epoch progress callback
+        epoch_callback = EpochProgressCallback(total_epochs, update_job)
 
         # Update status: training
-        training_jobs[job_id]["status"] = "training"
-        training_jobs[job_id]["current_step"] = 3
-        training_jobs[job_id]["progress_message"] = "Training model..."
+        update_job({
+            "status": "training",
+            "current_step": 3,
+            "progress_message": "Training model..."
+        })
 
-        # Run training
+        # Run training with epoch callback
         result = run_training(
             paths=data_paths,
             save_dir=save_dir,
@@ -1039,18 +1418,32 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
             generate_report=generate_report,
             use_llm=use_llm,
             verbose=True,
+            extra_callbacks=[epoch_callback],
         )
 
         # Update status: complete
-        training_jobs[job_id]["status"] = "complete"
-        training_jobs[job_id]["current_step"] = 4
-        training_jobs[job_id]["progress_message"] = "Training complete!"
-        training_jobs[job_id]["result"] = {
+        training_result = {
             "accuracy": f"{result.training_result.test_accuracy * 100:.1f}%",
             "loss": f"{result.training_result.test_loss:.4f}",
             "model_path": save_dir,
             "report_path": result.report_path,
         }
+        update_job({
+            "status": "complete",
+            "current_step": 4,
+            "progress_message": "Training complete!",
+            "result": training_result,
+        })
+
+        # Persist training state to disk (survives page refresh until New Run)
+        _save_training_state({
+            "model_name": model_name,
+            "selected_labels": labels,
+            "architecture": architecture,
+            "status": "complete",
+            "job_id": job_id,
+            "result": training_result,
+        })
 
         # Save model metadata
         model_metadata = {
@@ -1069,9 +1462,11 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
             json.dump(model_metadata, f, indent=2)
 
     except Exception as e:
-        training_jobs[job_id]["status"] = "error"
-        training_jobs[job_id]["error_message"] = str(e)
-        training_jobs[job_id]["progress_message"] = f"Error: {str(e)}"
+        update_job({
+            "status": "error",
+            "error_message": str(e),
+            "progress_message": f"Error: {str(e)}"
+        })
 
 
 @app.post("/api/training/start")
@@ -1091,6 +1486,8 @@ async def start_training(request: TrainingRequest, background_tasks: BackgroundT
     training_jobs[job_id] = {
         "job_id": job_id,
         "model_name": request.model_name,
+        "labels": request.labels,
+        "architecture": request.architecture,
         "status": "pending",
         "current_step": 0,
         "current_epoch": None,
@@ -1098,7 +1495,9 @@ async def start_training(request: TrainingRequest, background_tasks: BackgroundT
         "progress_message": "Initializing...",
         "error_message": None,
         "result": None,
+        "created_at": datetime.now().isoformat(),
     }
+    _save_training_jobs(training_jobs)
 
     # Start training in background thread (not FastAPI background task for long-running)
     thread = threading.Thread(
@@ -1134,6 +1533,51 @@ async def stop_training(job_id: str):
     return {"message": "Training stop requested"}
 
 
+def _detect_model_architecture(model_dir: Path) -> str:
+    """Detect model architecture from files in directory."""
+    for f in model_dir.iterdir():
+        name = f.name.lower()
+        if "resnet" in name:
+            return "ResNet"
+        elif "cnn" in name:
+            return "CNN"
+    return "Unknown"
+
+
+def _generate_model_info(model_dir: Path) -> dict:
+    """Generate model_info.json for a model directory that lacks one."""
+    # Try to detect architecture from filenames
+    architecture = _detect_model_architecture(model_dir)
+
+    # Try to find any keras/h5 model file for creation date
+    model_files = list(model_dir.glob("*.keras")) + list(model_dir.glob("*.h5"))
+    if model_files:
+        created_at = datetime.fromtimestamp(model_files[0].stat().st_mtime)
+    else:
+        created_at = datetime.now()
+
+    # Find report if exists
+    report_files = list(model_dir.glob("*.pdf"))
+    report_path = str(report_files[0]) if report_files else None
+
+    info = {
+        "name": model_dir.name,
+        "architecture": architecture,
+        "accuracy": 0.0,
+        "loss": 0.0,
+        "created_at": created_at.isoformat(),
+        "report_path": report_path,
+        "auto_generated": True,
+    }
+
+    # Save the generated info
+    info_path = model_dir / "model_info.json"
+    with open(info_path, "w") as f:
+        json.dump(info, f, indent=2)
+
+    return info
+
+
 @app.get("/api/models", response_model=list[ModelInfo])
 async def get_models():
     """Get list of all trained models."""
@@ -1144,22 +1588,30 @@ async def get_models():
 
     for model_dir in MODELS_DIR.iterdir():
         if model_dir.is_dir():
+            # Skip hidden directories
+            if model_dir.name.startswith('.'):
+                continue
+
             info_path = model_dir / "model_info.json"
+
             if info_path.exists():
                 with open(info_path) as f:
                     info = json.load(f)
+            else:
+                # Auto-generate model info if missing
+                info = _generate_model_info(model_dir)
 
-                models.append(ModelInfo(
-                    id=model_dir.name,
-                    name=info.get("name", model_dir.name),
-                    accuracy=f"{info.get('accuracy', 0) * 100:.1f}%",
-                    loss=f"{info.get('loss', 0):.4f}",
-                    date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d"),
-                    architecture=info.get("architecture", "Unknown"),
-                    status="Active",
-                    path=str(model_dir),
-                    report_path=info.get("report_path"),
-                ))
+            models.append(ModelInfo(
+                id=model_dir.name,
+                name=info.get("name", model_dir.name),
+                accuracy=f"{info.get('accuracy', 0) * 100:.1f}%",
+                loss=f"{info.get('loss', 0):.4f}",
+                date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d"),
+                architecture=info.get("architecture", "Unknown"),
+                status="Active",
+                path=str(model_dir),
+                report_path=info.get("report_path"),
+            ))
 
     # Sort by date (newest first)
     models.sort(key=lambda m: m.date, reverse=True)
@@ -1175,11 +1627,12 @@ async def get_model(model_id: str):
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
 
     info_path = model_dir / "model_info.json"
-    if not info_path.exists():
-        raise HTTPException(status_code=404, detail=f"Model info not found for '{model_id}'")
-
-    with open(info_path) as f:
-        info = json.load(f)
+    if info_path.exists():
+        with open(info_path) as f:
+            info = json.load(f)
+    else:
+        # Auto-generate model info if missing
+        info = _generate_model_info(model_dir)
 
     return ModelInfo(
         id=model_dir.name,
@@ -1192,6 +1645,47 @@ async def get_model(model_id: str):
         path=str(model_dir),
         report_path=info.get("report_path"),
     )
+
+
+class ModelGraphs(BaseModel):
+    accuracy: Optional[str] = None  # base64 encoded PNG
+    loss: Optional[str] = None
+    confusion_matrix: Optional[str] = None
+
+
+@app.get("/api/models/{model_id}/graphs", response_model=ModelGraphs)
+async def get_model_graphs(model_id: str):
+    """Get model training graphs as base64 encoded images."""
+    import base64
+
+    model_dir = MODELS_DIR / model_id
+    graphs_dir = model_dir / "graphs"
+
+    if not model_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+
+    graphs = ModelGraphs()
+
+    if graphs_dir.exists():
+        # Read accuracy graph
+        accuracy_path = graphs_dir / "accuracy.png"
+        if accuracy_path.exists():
+            with open(accuracy_path, "rb") as f:
+                graphs.accuracy = base64.b64encode(f.read()).decode("utf-8")
+
+        # Read loss graph
+        loss_path = graphs_dir / "loss.png"
+        if loss_path.exists():
+            with open(loss_path, "rb") as f:
+                graphs.loss = base64.b64encode(f.read()).decode("utf-8")
+
+        # Read confusion matrix
+        matrix_path = graphs_dir / "confusion_matrix.png"
+        if matrix_path.exists():
+            with open(matrix_path, "rb") as f:
+                graphs.confusion_matrix = base64.b64encode(f.read()).decode("utf-8")
+
+    return graphs
 
 
 @app.delete("/api/models/{model_id}")
@@ -1258,6 +1752,41 @@ async def download_report(path: str):
         report_path,
         media_type="application/pdf",
         filename=report_path.name
+    )
+
+
+@app.get("/api/reports/export-all")
+async def export_all_reports():
+    """Download all reports as a ZIP file."""
+    # Collect all PDF reports
+    pdf_files = []
+    if MODELS_DIR.exists():
+        for model_dir in MODELS_DIR.iterdir():
+            if model_dir.is_dir():
+                for pdf_file in model_dir.glob("*.pdf"):
+                    pdf_files.append(pdf_file)
+
+    if not pdf_files:
+        raise HTTPException(status_code=404, detail="No reports found to export")
+
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for pdf_path in pdf_files:
+            # Use model_name/report.pdf structure in ZIP
+            arcname = f"{pdf_path.parent.name}/{pdf_path.name}"
+            zip_file.write(pdf_path, arcname)
+
+    zip_buffer.seek(0)
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"all_reports_{timestamp}.zip"
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 

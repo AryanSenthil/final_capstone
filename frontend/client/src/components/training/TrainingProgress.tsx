@@ -28,34 +28,34 @@ export function TrainingProgress({ status, currentStep, currentEpoch, totalEpoch
   };
 
   return (
-    <div className="bg-muted/30 rounded-xl p-5 border border-border/50">
-      <div className="flex items-center justify-between relative mb-6 px-4">
+    <div className="bg-muted/30 rounded-lg p-3 border border-border/50">
+      <div className="flex items-center justify-between relative mb-3 px-2">
         {/* Connecting Line */}
-        <div className="absolute left-8 right-8 top-[14px] h-[2px] bg-muted -z-10" />
+        <div className="absolute left-6 right-6 top-[11px] h-[2px] bg-muted -z-10" />
 
         {steps.map((step) => {
            const stepState = getStepState(step.id);
            return (
-             <div key={step.id} className="flex flex-col items-center gap-2 bg-transparent">
+             <div key={step.id} className="flex flex-col items-center gap-1 bg-transparent">
                <motion.div
                  initial={false}
                  animate={{
-                   scale: stepState === 'active' ? 1.15 : 1,
+                   scale: stepState === 'active' ? 1.1 : 1,
                    borderColor: stepState === 'active' || stepState === 'complete' ? 'var(--color-primary)' : 'var(--color-muted)',
                    backgroundColor: stepState === 'complete' ? 'var(--color-primary)' : 'var(--color-background)'
                  }}
                  className={cn(
-                   "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors duration-300 z-10 shadow-sm",
+                   "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors duration-300 z-10 shadow-sm",
                    stepState === 'error' && "border-destructive text-destructive"
                  )}
                >
-                 {stepState === 'complete' && <Check size={14} className="text-primary-foreground" />}
-                 {stepState === 'active' && <Loader2 size={14} className="animate-spin text-primary" />}
-                 {stepState === 'error' && <AlertCircle size={14} />}
-                 {stepState === 'pending' && <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />}
+                 {stepState === 'complete' && <Check size={10} className="text-primary-foreground" />}
+                 {stepState === 'active' && <Loader2 size={10} className="animate-spin text-primary" />}
+                 {stepState === 'error' && <AlertCircle size={10} />}
+                 {stepState === 'pending' && <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20" />}
                </motion.div>
                <span className={cn(
-                 "text-xs font-medium transition-colors duration-300",
+                 "text-[9px] font-medium transition-colors duration-300",
                  stepState === 'active' ? "text-primary font-bold" : "text-muted-foreground",
                  stepState === 'complete' && "text-primary"
                )}>
@@ -66,25 +66,25 @@ export function TrainingProgress({ status, currentStep, currentEpoch, totalEpoch
         })}
       </div>
 
-      <div className="text-center h-8 flex items-center justify-center bg-background/50 rounded-lg border border-border/50 py-2">
+      <div className="text-center flex items-center justify-center bg-background/50 rounded border border-border/50 py-1.5 px-2 min-h-[28px]">
         {status === 'idle' && (
-          <p className="text-sm text-muted-foreground">Ready to start training session</p>
+          <p className="text-[10px] text-muted-foreground">Ready to start</p>
         )}
         {status === 'training' && (
-          <p className="text-sm font-medium text-foreground animate-pulse flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
+          <p className="text-[10px] font-medium text-foreground animate-pulse flex items-center gap-1.5">
+            <Loader2 size={10} className="animate-spin" />
             {steps[currentStep - 1]?.fullLabel}...
             {currentStep === 3 && currentEpoch !== undefined && totalEpochs !== undefined && (
-              <span className="font-mono opacity-75 bg-muted px-1.5 py-0.5 rounded text-xs">
-                Epoch {currentEpoch}/{totalEpochs}
+              <span className="font-mono opacity-75 bg-muted px-1 py-0.5 rounded text-[9px]">
+                {currentEpoch}/{totalEpochs}
               </span>
             )}
           </p>
         )}
         {status === 'complete' && (
-          <p className="text-sm font-medium text-emerald-600 flex items-center justify-center gap-2">
-            <Check size={16} />
-            Training successfully completed
+          <p className="text-[10px] font-medium text-emerald-600 flex items-center justify-center gap-1">
+            <Check size={12} />
+            Complete
           </p>
         )}
       </div>

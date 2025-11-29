@@ -19,13 +19,25 @@ interface Model {
   report_path: string | null;
 }
 
+interface ModelGraphs {
+  accuracy?: string;
+  loss?: string;
+  confusion_matrix?: string;
+}
+
 export default function ModelDetailPage() {
   const [showReport, setShowReport] = useState(false);
   const [, params] = useRoute("/models/:id");
   const modelId = params?.id;
 
   const { data: model, isLoading, error } = useQuery<Model>({
-    queryKey: ["/api/models", modelId],
+    queryKey: [`/api/models/${modelId}`],
+    enabled: !!modelId,
+  });
+
+  // Fetch model graphs
+  const { data: graphs } = useQuery<ModelGraphs>({
+    queryKey: [`/api/models/${modelId}/graphs`],
     enabled: !!modelId,
   });
 
@@ -135,7 +147,7 @@ export default function ModelDetailPage() {
 
             {/* Visualizations */}
             <div className="lg:col-span-2 bg-card rounded-xl border shadow-sm p-6 min-h-[500px]">
-               <GraphCarousel hasData={true} />
+               <GraphCarousel hasData={true} graphs={graphs} />
             </div>
          </div>
       </div>

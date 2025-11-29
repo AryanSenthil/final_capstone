@@ -68,14 +68,29 @@ Respond with ONLY a JSON object (no markdown, no explanation):
 }}"""
 
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    response = client.responses.create(
-        model=OPENAI_MODEL,
-        input=prompt
-    )
-    
-    response_text = response.output_text.strip()
-    response_text = response_text.replace("```json", "").replace("```", "").strip()
-    structure = json.loads(response_text)
+    try:
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a data analyst expert at detecting CSV file structures. Respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            timeout=30.0  # 30 second timeout
+        )
+
+        response_text = response.choices[0].message.content.strip()
+        response_text = response_text.replace("```json", "").replace("```", "").strip()
+        structure = json.loads(response_text)
+    except Exception as e:
+        # Fallback to sensible defaults if AI detection fails
+        print(f"[WARN] AI CSV detection failed: {e}, using defaults")
+        structure = {
+            "skip_rows": 0,
+            "time_column": 0,
+            "values_column": 1,
+            "values_label": "Value"
+        }
     
     required_keys = ["skip_rows", "time_column", "values_column", "values_label"]
     if not all(k in structure for k in required_keys):

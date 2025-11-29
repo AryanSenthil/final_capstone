@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
 const httpServer = createServer(app);
@@ -11,6 +12,20 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+// IMPORTANT: Proxy must be BEFORE body parsers to forward raw request body
+const apiProxy = createProxyMiddleware({
+  target: "http://localhost:8000",
+  changeOrigin: true,
+  pathRewrite: undefined, // Keep the path as-is (don't strip /api)
+});
+
+// Apply proxy to all /api routes BEFORE body parsing
+app.use("/api", (req, res, next) => {
+  // Prepend /api back since Express strips it
+  req.url = "/api" + req.url;
+  return apiProxy(req, res, next);
+});
 
 app.use(
   express.json({

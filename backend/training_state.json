@@ -1,0 +1,9 @@
+{
+  "model_name": "cnn_halfcore_disbond_classifier",
+  "selected_labels": [],
+  "architecture": "CNN",
+  "last_updated": "2025-11-29T01:27:08.322180",
+  "status": "idle",
+  "job_id": null,
+  "result": null
+}

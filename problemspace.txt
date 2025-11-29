@@ -1,0 +1,41 @@
+GPU Memory Problem - NVIDIA Running Out of Space
+================================================
+
+Problem:
+- GTX 1650 Ti has only 4GB VRAM
+- Training/testing eats up memory and doesn't release it
+- Python processes hold onto GPU memory even after execution
+- Had to manually kill processes (PIDs 8874, 27279) using 3.5GB
+
+Symptoms:
+- nvidia-smi shows high memory usage even when not training
+- New training runs fail or slow down due to memory pressure
+- Jupyter notebooks hold GPU memory after cells finish
+
+Potential Solutions to Investigate:
+
+1. Clear GPU memory in code:
+   - tf.keras.backend.clear_session()
+   - gc.collect()
+   - torch.cuda.empty_cache() (if using PyTorch)
+
+2. Limit GPU memory growth (TensorFlow):
+   gpus = tf.config.experimental.list_physical_devices('GPU')
+   tf.config.experimental.set_memory_growth(gpus[0], True)
+
+3. Set memory limit:
+   tf.config.set_logical_device_configuration(
+       gpus[0],
+       [tf.config.LogicalDeviceConfiguration(memory_limit=3072)]
+   )
+
+4. Reduce batch size in configs.py (currently BATCH_SIZE = 1, already minimal)
+
+5. Use mixed precision training (float16 instead of float32):
+   tf.keras.mixed_precision.set_global_policy('mixed_float16')
+
+6. Restart Jupyter kernel after training runs
+
+7. Use smaller model architecture or reduce layer sizes
+
+8. Process data in smaller chunks

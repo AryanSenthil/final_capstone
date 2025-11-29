@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Download, Loader2, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ReportModalProps {
   open: boolean;
@@ -11,20 +12,13 @@ interface ReportModalProps {
 }
 
 export function ReportModal({ open, onOpenChange, reportPath, modelName }: ReportModalProps) {
-  const [zoom, setZoom] = useState(100);
-  const [page, setPage] = useState(1);
-  const totalPages = 5;
-
-  // Reset page when modal opens
-  useEffect(() => {
-    if (open) {
-      setPage(1);
-      setZoom(100);
-    }
-  }, [open]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadComplete, setDownloadComplete] = useState(false);
 
   const handleDownload = async () => {
-    if (reportPath) {
+    if (reportPath && !isDownloading) {
+      setIsDownloading(true);
+      setDownloadComplete(false);
       try {
         const response = await fetch(`/api/training/report/download?path=${encodeURIComponent(reportPath)}`);
         if (response.ok) {
@@ -37,9 +31,13 @@ export function ReportModal({ open, onOpenChange, reportPath, modelName }: Repor
           a.click();
           window.URL.revokeObjectURL(url);
           a.remove();
+          setDownloadComplete(true);
+          setTimeout(() => setDownloadComplete(false), 2000);
         }
       } catch (error) {
         console.error('Failed to download report:', error);
+      } finally {
+        setIsDownloading(false);
       }
     }
   };
@@ -54,56 +52,50 @@ export function ReportModal({ open, onOpenChange, reportPath, modelName }: Repor
             {modelName ? `${modelName}_Report.pdf` : 'Training_Report.pdf'}
           </h2>
           <div className="flex items-center gap-2 mr-6">
-            <Button variant="outline" size="sm" className="h-8 gap-1" onClick={handleDownload}>
-              <Download size={14} /> Download
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 gap-1.5 transition-all duration-200",
+                "hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-md",
+                "active:scale-95 active:shadow-sm",
+                isDownloading && "opacity-70 cursor-wait",
+                downloadComplete && "bg-green-500 text-white border-green-500 hover:bg-green-600"
+              )}
+              onClick={handleDownload}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Downloading...
+                </>
+              ) : downloadComplete ? (
+                <>
+                  <Check size={14} /> Downloaded
+                </>
+              ) : (
+                <>
+                  <Download size={14} /> Download
+                </>
+              )}
             </Button>
           </div>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center justify-center gap-4 py-2 bg-muted/30 border-b text-sm shrink-0">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
-              <ChevronLeft size={16} />
-            </Button>
-            <span className="w-24 text-center">Page {page} of {totalPages}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
-              <ChevronRight size={16} />
-            </Button>
-          </div>
-          <div className="w-px h-4 bg-border" />
-          <div className="flex items-center gap-1">
-             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(50, z - 10))}>
-               <ZoomOut size={16} />
-             </Button>
-             <span className="w-16 text-center">{zoom}%</span>
-             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(200, z + 10))}>
-               <ZoomIn size={16} />
-             </Button>
-          </div>
-        </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-auto bg-zinc-200/50 dark:bg-zinc-950/50 p-8 flex justify-center">
+        <div className="flex-1 overflow-auto bg-zinc-200/50 dark:bg-zinc-950/50 p-4 flex justify-center">
           {reportPath ? (
             <iframe
-              src={`/api/training/report/view?path=${encodeURIComponent(reportPath)}`}
+              src={`/api/training/report/view?path=${encodeURIComponent(reportPath)}#toolbar=0&navpanes=0`}
               className="w-full h-full bg-white rounded shadow-xl"
-              style={{
-                transform: `scale(${zoom / 100})`,
-                transformOrigin: 'top center',
-              }}
             />
           ) : (
             <div
-              className="bg-white shadow-xl transition-all duration-200 origin-top"
-              style={{
-                width: `${8.5 * 60 * (zoom/100)}px`,
-                height: `${11 * 60 * (zoom/100)}px`,
-              }}
+              className="bg-white shadow-xl w-full max-w-3xl"
             >
               {/* Mock Content */}
-              <div className="p-12 text-zinc-900 space-y-6" style={{ fontSize: `${16 * (zoom/100)}px` }}>
+              <div className="p-12 text-zinc-900 space-y-6">
                 <div className="border-b-2 border-zinc-900 pb-4 mb-8">
                   <h1 className="font-bold text-3xl">Model Training Report</h1>
                   <p className="text-zinc-500 mt-2">Generated on {new Date().toLocaleDateString()}</p>

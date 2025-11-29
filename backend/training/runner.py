@@ -77,6 +77,7 @@ def run_training(
     api_key: Optional[str] = None,
     author: str = "Auto-generated",
     verbose: bool = True,
+    extra_callbacks: list = None,
 ) -> RunResult:
     """
     Complete training workflow with report generation.
@@ -140,6 +141,7 @@ def run_training(
         data_config=data_config,
         model_config=model_config,
         verbose=True,  # Always verbose inside capture
+        extra_callbacks=extra_callbacks,
     )
     
     # Generate report if requested
@@ -183,6 +185,7 @@ def run_training(
             architecture=architecture,
             test_accuracy=training_result.test_accuracy,
             test_loss=training_result.test_loss,
+            training_time=training_result.training_time,
             report_path=report_path,
             api_key=api_key,
         )

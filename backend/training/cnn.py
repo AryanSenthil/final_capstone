@@ -69,7 +69,8 @@ def train(
     train_ds: tf.data.Dataset,
     val_ds: tf.data.Dataset,
     config: CNNConfig = None,
-    verbose: int = 1
+    verbose: int = 1,
+    extra_callbacks: list = None
 ) -> tf.keras.callbacks.History:
     """
     Train CNN model with early stopping and learning rate reduction.
@@ -94,22 +95,28 @@ def train(
         metrics=['accuracy']
     )
 
-    # Define callbacks
+    # Define callbacks - optimize for accuracy metrics
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',
+            monitor='val_accuracy',
+            mode='max',
             patience=config.patience,
             restore_best_weights=True,
             verbose=1
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
-            monitor='val_loss',
+            monitor='accuracy',
+            mode='max',
             factor=config.reduce_lr_factor,
             patience=config.reduce_lr_patience,
             min_lr=config.min_lr,
             verbose=1
         )
     ]
+
+    # Add extra callbacks if provided
+    if extra_callbacks:
+        callbacks.extend(extra_callbacks)
 
     # Train
     history = model.fit(
@@ -156,7 +163,8 @@ def run_pipeline(
     model_name: str = 'cnn_model',
     data_config: DataConfig = None,
     model_config: CNNConfig = None,
-    verbose: bool = True
+    verbose: bool = True,
+    extra_callbacks: list = None
 ) -> TrainingResult:
     """
     Execute complete CNN training pipeline.
@@ -213,11 +221,17 @@ def run_pipeline(
         print("\nPhase 3: Training")
         print("-" * 40)
 
+    import time
+    start_time = time.time()
+
     history = train(
         model, train_spec_ds, val_spec_ds,
         config=model_config,
-        verbose=1 if verbose else 0
+        verbose=1 if verbose else 0,
+        extra_callbacks=extra_callbacks
     )
+
+    training_time = time.time() - start_time
 
     # Evaluate on test set
     if verbose:
@@ -274,6 +288,7 @@ def run_pipeline(
         true_labels=y_true,
         test_accuracy=test_results['accuracy'],
         test_loss=test_results['loss'],
+        training_time=training_time,
         model_paths=model_paths,
         graph_paths=graph_paths,
         graph_base64=graph_base64

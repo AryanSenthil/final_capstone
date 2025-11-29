@@ -20,6 +20,7 @@ export default function ReportsPage() {
   const [showReport, setShowReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: reports = [], isLoading } = useQuery<Report[]>({
     queryKey: ["/api/reports"],
@@ -55,6 +56,33 @@ export default function ReportsPage() {
     }
   };
 
+  const handleExportAll = async () => {
+    if (reports.length === 0) return;
+
+    setIsExporting(true);
+    try {
+      const response = await fetch('/api/reports/export-all');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Get filename from Content-Disposition header or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        const filenameMatch = contentDisposition?.match(/filename=(.+)/);
+        a.download = filenameMatch ? filenameMatch[1] : 'all_reports.zip';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+      }
+    } catch (error) {
+      console.error('Failed to export all reports:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -65,13 +93,25 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tighter text-foreground">Reports Library</h1>
-          <p className="text-muted-foreground text-lg">Centralized archive of all experiment documentation.</p>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold tracking-tight text-primary">Reports Library</h2>
+          <p className="text-muted-foreground text-base">Centralized archive of all experiment documentation.</p>
         </div>
-        <Button className="gap-2 rounded-xl shadow-lg shadow-primary/20">
-          <Download size={18} /> Export All
+        <Button
+          className="gap-2 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all"
+          onClick={handleExportAll}
+          disabled={isExporting || reports.length === 0}
+        >
+          {isExporting ? (
+            <>
+              <Loader2 size={18} className="animate-spin" /> Exporting...
+            </>
+          ) : (
+            <>
+              <Download size={18} /> Export All
+            </>
+          )}
         </Button>
       </div>
 
@@ -139,7 +179,7 @@ export default function ReportsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                        className="h-8 w-8 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 active:scale-95 active:bg-blue-200 dark:active:bg-blue-800/40 transition-all duration-150"
                         onClick={(e) => handleDownload(report, e)}
                       >
                         <Download size={16} />

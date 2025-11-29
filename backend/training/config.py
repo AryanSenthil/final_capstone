@@ -64,7 +64,7 @@ class ResNetConfig:
 @dataclass
 class TrainingResult:
     """Container for training outputs."""
-    
+
     model: tf.keras.Model
     history: dict
     metadata: dict
@@ -73,6 +73,7 @@ class TrainingResult:
     true_labels: np.ndarray
     test_accuracy: float
     test_loss: float
+    training_time: float = 0.0  # Training duration in seconds
     model_paths: dict = field(default_factory=dict)
     graph_paths: dict = field(default_factory=dict)
     graph_base64: dict = field(default_factory=dict)
