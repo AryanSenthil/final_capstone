@@ -1,7 +1,7 @@
 """
-Damage Lab Chat Agent
-=====================
-A comprehensive agent for the Damage Lab sensor data application.
+Aryan Senthil's Chat Agent
+==========================
+A comprehensive agent for Aryan Senthil's sensor data application.
 Uses direct Python function calls instead of HTTP API calls for fast execution.
 
 Usage:
@@ -1775,7 +1775,7 @@ def list_reports() -> dict:
 
 def get_system_status() -> dict:
     """
-    Check the Damage Lab system status.
+    Check the system status.
 
     Returns:
         dict: System health status including directory availability.
@@ -1786,7 +1786,7 @@ def get_system_status() -> dict:
         return {
             "status": "success",
             "system_status": "ok",
-            "message": "Damage Lab system is running",
+            "message": "System is running",
             "directories": {
                 "database": DATABASE_DIR.exists(),
                 "raw_database": RAW_DATABASE_DIR.exists(),
@@ -1924,7 +1924,7 @@ try:
         name="damage_lab_agent",
         model=LiteLlm(model="openai/gpt-5.1"),
         description=(
-            "AI assistant for the Damage Lab sensor data application. "
+            "AI assistant for Aryan Senthil's sensor data application."
             "Manages sensor datasets, trains neural network models for damage detection, "
             "and runs inference on new data."
         ),
@@ -1943,7 +1943,7 @@ except ImportError:
 def run_cli():
     """Simple CLI interface for testing the agent."""
     print("=" * 60)
-    print("Damage Lab Chat Agent")
+    print("Aryan Senthil's Chat Agent")
     print("=" * 60)
     print("Type 'quit' or 'exit' to stop.")
     print("Type 'help' for available commands.\n")

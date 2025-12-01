@@ -1,5 +1,5 @@
 """
-Damage Lab Chat Agent Package
+Aryan Senthil's Chat Agent Package
 """
 
 from .damage_lab_agent import (
