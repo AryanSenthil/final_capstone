@@ -50,6 +50,11 @@ class SettingsResponse(BaseModel):
     validation_split: float
 
 
+class ApiKeyUpdate(BaseModel):
+    """Request model for API key update."""
+    api_key: str
+
+
 def _read_file(path: Path) -> str:
     """Read a Python config file."""
     return path.read_text()
@@ -139,3 +144,26 @@ async def update_settings(updates: SettingsUpdate) -> SettingsResponse:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {e}")
+
+
+@router.post("/api-key")
+async def update_api_key(update: ApiKeyUpdate):
+    """
+    Update OpenAI API key in environment.
+    This endpoint stores the API key temporarily in memory for the current session.
+    """
+    import os
+    from openai import OpenAI
+
+    try:
+        # Set the environment variable
+        os.environ["OPENAI_API_KEY"] = update.api_key
+
+        # Reinitialize the OpenAI client in api.py
+        import api
+        api.openai_client = OpenAI(api_key=update.api_key) if update.api_key else None
+
+        return {"success": True, "message": "API key updated successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update API key: {e}")

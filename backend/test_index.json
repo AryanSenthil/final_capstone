@@ -68,5 +68,15 @@
     "majority_class": "0.25_disbond",
     "majority_confidence": 1.0,
     "tags": []
+  },
+  {
+    "test_id": "20251201_093228",
+    "timestamp": "2025-12-01T09:32:28.671102",
+    "csv_filename": "cycle_003.csv",
+    "model_name": "resnet_undamaged_disbond",
+    "num_chunks": 3,
+    "majority_class": "undamaged",
+    "majority_confidence": 1.0,
+    "tags": []
   }
 ]

@@ -44,6 +44,9 @@ from agent import (
     get_dataset_summary,
     get_training_recommendations,
     explain_results,
+    get_model_graphs,
+    get_report_url,
+    read_report,
     list_reports,
     get_system_status,
     SYSTEM_INSTRUCTION,
@@ -78,6 +81,9 @@ TOOL_FUNCTIONS = {
     "get_dataset_summary": get_dataset_summary,
     "get_training_recommendations": get_training_recommendations,
     "explain_results": explain_results,
+    "get_model_graphs": get_model_graphs,
+    "get_report_url": get_report_url,
+    "read_report": read_report,
     "list_reports": list_reports,
     "get_system_status": get_system_status,
 }
@@ -265,7 +271,17 @@ def generate_session_id() -> str:
 @router.post("/send", response_model=ChatResponse)
 async def send_message(request: ChatRequest):
     """Send a message and get a response (non-streaming)."""
-    client = OpenAI()
+    try:
+        client = OpenAI()
+    except Exception as e:
+        error_msg = str(e)
+        if "api" in error_msg.lower() or "key" in error_msg.lower():
+            raise HTTPException(
+                status_code=401,
+                detail="OpenAI API Error: Please check your API key and billing status. This is usually caused by an invalid API key or insufficient credits."
+            )
+        raise HTTPException(status_code=500, detail=f"OpenAI initialization error: {error_msg}")
+
     tools = build_tools_list()
 
     # Get or create session
@@ -282,12 +298,35 @@ async def send_message(request: ChatRequest):
     while iterations < max_iterations:
         iterations += 1
 
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto"
-        )
+        try:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto"
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "insufficient_quota" in error_msg.lower() or "billing" in error_msg.lower():
+                raise HTTPException(
+                    status_code=402,
+                    detail="OpenAI API Error: Your account has insufficient credits or billing issues. Please add credits to your OpenAI account."
+                )
+            elif "invalid" in error_msg.lower() and "key" in error_msg.lower():
+                raise HTTPException(
+                    status_code=401,
+                    detail="OpenAI API Error: Invalid API key. Please check your API key configuration."
+                )
+            elif "rate_limit" in error_msg.lower():
+                raise HTTPException(
+                    status_code=429,
+                    detail="OpenAI API Error: Rate limit exceeded. Please try again in a moment."
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"OpenAI API Error: {error_msg}"
+                )
 
         message = response.choices[0].message
 
@@ -356,7 +395,16 @@ async def stream_message(request: StreamChatRequest):
     """Send a message and get a streaming response with tool call updates."""
 
     async def generate() -> AsyncGenerator[str, None]:
-        client = OpenAI()
+        try:
+            client = OpenAI()
+        except Exception as e:
+            error_msg = str(e)
+            if "api" in error_msg.lower() or "key" in error_msg.lower():
+                yield f"data: {json.dumps({'type': 'error', 'error': 'OpenAI API Error: Please check your API key and billing status. This is usually caused by an invalid API key or insufficient credits.'})}\n\n"
+                return
+            yield f"data: {json.dumps({'type': 'error', 'error': f'OpenAI initialization error: {error_msg}'})}\n\n"
+            return
+
         tools = build_tools_list()
 
         session_id = request.session_id or generate_session_id()
@@ -374,12 +422,24 @@ async def stream_message(request: StreamChatRequest):
             iterations += 1
 
             # Non-streaming for tool calls, streaming for final response
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto"
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=OPENAI_MODEL,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto"
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "insufficient_quota" in error_msg.lower() or "billing" in error_msg.lower():
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'OpenAI API Error: Your account has insufficient credits or billing issues. Please add credits to your OpenAI account.'})}\n\n"
+                elif "invalid" in error_msg.lower() and "key" in error_msg.lower():
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'OpenAI API Error: Invalid API key. Please check your API key configuration.'})}\n\n"
+                elif "rate_limit" in error_msg.lower():
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'OpenAI API Error: Rate limit exceeded. Please try again in a moment.'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'error': f'OpenAI API Error: {error_msg}'})}\n\n"
+                return
 
             message = response.choices[0].message
 
@@ -411,9 +471,17 @@ async def stream_message(request: StreamChatRequest):
                     yield f"data: {json.dumps({'type': 'tool_start', 'name': func_name, 'arguments': func_args})}\n\n"
 
                     result = execute_tool(func_name, func_args)
+                    result_parsed = json.loads(result) if result else None
 
                     # Notify about tool result
-                    yield f"data: {json.dumps({'type': 'tool_result', 'name': func_name, 'result': json.loads(result) if result else None})}\n\n"
+                    yield f"data: {json.dumps({'type': 'tool_result', 'name': func_name, 'result': result_parsed})}\n\n"
+
+                    # Check for artifacts in the result and emit them
+                    if result_parsed and isinstance(result_parsed, dict) and "artifacts" in result_parsed:
+                        artifacts = result_parsed.get("artifacts", [])
+                        for artifact in artifacts:
+                            if artifact:  # Filter out None artifacts
+                                yield f"data: {json.dumps({'type': 'artifact', 'artifact': artifact})}\n\n"
 
                     messages.append({
                         "role": "tool",

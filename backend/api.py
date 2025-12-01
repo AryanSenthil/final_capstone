@@ -2087,6 +2087,32 @@ async def delete_model(model_id: str):
     }
 
 
+@app.get("/api/models/{model_id}/weights")
+async def download_model_weights(model_id: str):
+    """Download the .keras weights file for a model."""
+    model_dir = MODELS_DIR / model_id
+
+    if not model_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+
+    # Look for .keras file first (preferred), then .h5
+    keras_files = list(model_dir.glob("*.keras"))
+    if keras_files:
+        weights_path = keras_files[0]
+    else:
+        h5_files = list(model_dir.glob("*.h5"))
+        if h5_files:
+            weights_path = h5_files[0]
+        else:
+            raise HTTPException(status_code=404, detail="No weights file found for this model")
+
+    return FileResponse(
+        weights_path,
+        media_type="application/octet-stream",
+        filename=weights_path.name
+    )
+
+
 @app.get("/api/reports", response_model=list[ReportInfo])
 async def get_reports():
     """Get list of all training reports."""
@@ -2151,6 +2177,33 @@ async def get_reports():
     return reports
 
 
+@app.delete("/api/reports/{report_id}")
+async def delete_report(report_id: str):
+    """Delete a specific report PDF."""
+    # Search in models directory first
+    if MODELS_DIR.exists():
+        for model_dir in MODELS_DIR.iterdir():
+            if model_dir.is_dir():
+                for pdf_file in model_dir.glob("*.pdf"):
+                    if pdf_file.stem == report_id:
+                        pdf_file.unlink()
+                        return {"success": True, "message": f"Report {report_id} deleted"}
+
+    # Search in reports archive
+    reports_archive = BACKEND_DIR / "reports_archive"
+    if reports_archive.exists():
+        for pdf_file in reports_archive.glob("*.pdf"):
+            if pdf_file.stem == report_id:
+                pdf_file.unlink()
+                # Also remove metadata if exists
+                metadata_path = pdf_file.with_suffix(".json")
+                if metadata_path.exists():
+                    metadata_path.unlink()
+                return {"success": True, "message": f"Archived report {report_id} deleted"}
+
+    raise HTTPException(status_code=404, detail=f"Report '{report_id}' not found")
+
+
 @app.get("/api/training/report/view")
 async def view_report(path: str):
     """View a PDF report."""
@@ -2174,6 +2227,26 @@ async def download_report(path: str):
         report_path,
         media_type="application/pdf",
         filename=report_path.name
+    )
+
+
+@app.get("/api/reports/{model_id}/{filename}")
+async def get_report_by_model(model_id: str, filename: str):
+    """Get a specific report PDF for a model."""
+    model_dir = MODELS_DIR / model_id
+    report_path = model_dir / filename
+
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Validate it's a PDF
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files can be retrieved")
+
+    return FileResponse(
+        report_path,
+        media_type="application/pdf",
+        filename=filename
     )
 
 
@@ -2509,6 +2582,91 @@ async def delete_test(test_id: str):
         return {"success": True, "message": f"Test {test_id} deleted"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class NotesUpdate(BaseModel):
+    notes: str
+
+
+@app.put("/api/tests/{test_id}/notes")
+async def update_test_notes(test_id: str, update: NotesUpdate):
+    """Update notes for a test."""
+    db = get_test_database()
+
+    try:
+        test = db.get_test(test_id)
+        if not test:
+            raise HTTPException(status_code=404, detail=f"Test {test_id} not found")
+
+        # Update the notes in the database
+        db.update_test_notes(test_id, update.notes)
+        return {"success": True, "message": "Notes updated"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/tests/{test_id}/generate-notes")
+async def generate_test_notes(test_id: str):
+    """Generate AI notes for a test based on its results."""
+    db = get_test_database()
+
+    try:
+        test = db.get_test(test_id)
+        if not test:
+            raise HTTPException(status_code=404, detail=f"Test {test_id} not found")
+
+        # Build context for AI
+        predictions = test.get("predictions", [])
+        probabilities = test.get("probabilities", [])
+        majority_class = test.get("majority_class", "Unknown")
+        majority_percentage = test.get("majority_percentage", 0)
+        num_chunks = test.get("num_chunks", 0)
+        model_name = test.get("model_name", "Unknown")
+        csv_filename = Path(test.get("original_csv_path", "unknown.csv")).name
+
+        # Calculate average confidence
+        avg_confidence = 0
+        if probabilities:
+            confidences = [max(p) * 100 for p in probabilities if p]
+            if confidences:
+                avg_confidence = sum(confidences) / len(confidences)
+
+        # Build the prompt
+        prompt = f"""Generate brief, professional test notes for this sensor data analysis test:
+
+File: {csv_filename}
+Model Used: {model_name}
+Total Chunks Analyzed: {num_chunks}
+Predicted Classification: {majority_class}
+Classification Confidence: {majority_percentage:.1f}%
+Average Chunk Confidence: {avg_confidence:.1f}%
+Prediction Distribution: {', '.join(predictions[:10])}{'...' if len(predictions) > 10 else ''}
+
+Please generate concise technical notes (2-4 sentences) summarizing:
+1. The test results and confidence levels
+2. Any notable patterns or concerns
+3. A brief assessment of the classification reliability
+
+Keep the notes factual and professional."""
+
+        # Call OpenAI using the global client
+        if not openai_client:
+            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+        response = openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a technical analyst generating brief test notes for sensor data analysis results. Be concise and factual."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+        )
+
+        generated_notes = response.choices[0].message.content.strip()
+        return {"success": True, "notes": generated_notes}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate notes: {str(e)}")
 
 
 @app.post("/api/tests/inference", response_model=InferenceResponse)

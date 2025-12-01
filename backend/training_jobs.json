@@ -219,5 +219,27 @@
       "report_path": "/home/ari/Documents/final_capstone/backend/models/cnndisbond/cnndisbond_inspector_report.pdf"
     },
     "created_at": "2025-12-01T05:59:13.136122"
+  },
+  "e4b07f65": {
+    "job_id": "e4b07f65",
+    "model_name": "resnet_undamaged_disbond",
+    "labels": [
+      "undamaged",
+      "1.0_disbond"
+    ],
+    "architecture": "ResNet",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 31,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "100.0%",
+      "loss": "0.3015",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/resnet_undamaged_disbond",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/resnet_undamaged_disbond/resnet_undamaged_disbond_report.pdf"
+    },
+    "created_at": "2025-12-01T06:36:59.066598"
   }
 }

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Upload, X, FileText, Check, Loader2, ArrowRight, ArrowLeft, FolderOpen, Folder, Home, ChevronLeft } from "lucide-react";
+import { Upload, X, FileText, Check, Loader2, ArrowRight, ArrowLeft, FolderOpen, Folder, Home, ChevronLeft, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +38,7 @@ export default function TestNewFileModal({ open, onClose, onSuccess }: TestNewFi
   const [selectedFiles, setSelectedFiles] = useState<Array<{ path: string; name: string }>>([]);
   const [notes, setNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
   const [results, setResults] = useState<Array<{ filename: string; prediction: string; confidence: number; num_chunks: number }>>([]);
@@ -70,6 +71,60 @@ export default function TestNewFileModal({ open, onClose, onSuccess }: TestNewFi
 
   const handleNavigate = (path: string) => {
     setCurrentPath(path);
+  };
+
+  const handleGenerateNotes = async () => {
+    if (!selectedModel || selectedFiles.length === 0) {
+      toast({
+        title: "Cannot Generate Notes",
+        description: "Please select a model and at least one file first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingNotes(true);
+    try {
+      // Get model details
+      const modelResponse = await fetch(`/api/models/${selectedModel}`);
+      if (!modelResponse.ok) throw new Error("Failed to fetch model details");
+      const modelData = await modelResponse.json();
+
+      // Generate notes using OpenAI
+      const prompt = `Generate professional test notes for a sensor data analysis test with the following details:
+
+Model: ${modelData.name || selectedModel}
+Files to test: ${selectedFiles.map(f => f.name).join(", ")}
+Number of files: ${selectedFiles.length}
+
+Please generate concise, professional notes (2-3 sentences) that would be appropriate for documenting this inference test.`;
+
+      const response = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: prompt,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate notes');
+      const data = await response.json();
+
+      setNotes(data.response || '');
+      toast({
+        title: "Notes Generated",
+        description: "AI has generated test notes. You can edit them before running the test.",
+      });
+    } catch (error) {
+      console.error('Error generating notes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate notes. Please try again or write notes manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingNotes(false);
+    }
   };
 
   const runInference = async () => {
@@ -424,13 +479,38 @@ export default function TestNewFileModal({ open, onClose, onSuccess }: TestNewFi
                     className="space-y-5"
                   >
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold text-foreground">Notes (optional)</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-foreground">Notes (optional)</label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleGenerateNotes}
+                          disabled={isGeneratingNotes || !selectedModel || selectedFiles.length === 0}
+                          className="h-8 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                        >
+                          {isGeneratingNotes ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                              Generate Notes
+                            </>
+                          )}
+                        </Button>
+                      </div>
                       <Textarea
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="Add any notes about this test..."
                         className="min-h-[150px] resize-none"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Document the purpose of this test, expected results, or any other relevant information.
+                      </p>
                     </div>
                   </motion.div>
                 )}

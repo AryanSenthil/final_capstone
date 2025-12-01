@@ -1722,6 +1722,191 @@ def explain_results(test_id: str) -> dict:
 # Reporting Tools
 # ============================================================================
 
+def get_model_graphs(model_id: str) -> dict:
+    """
+    Get training graphs (accuracy, loss, confusion matrix) for a trained model.
+
+    Args:
+        model_id: The model ID (folder name, e.g., "cnn_crushcore_disbond")
+
+    Returns:
+        dict: Contains base64-encoded PNG images for each graph type.
+              Use this to show training visualizations to the user.
+
+    The returned images include:
+    - accuracy: Training/validation accuracy over epochs
+    - loss: Training/validation loss over epochs
+    - confusion_matrix: Heatmap of predictions vs actual labels
+    """
+    try:
+        import base64
+
+        model_dir = MODELS_DIR / model_id
+        graphs_dir = model_dir / "graphs"
+
+        if not model_dir.exists():
+            return {"status": "error", "error_message": f"Model '{model_id}' not found"}
+
+        graphs = {}
+
+        if graphs_dir.exists():
+            # Read accuracy graph
+            accuracy_path = graphs_dir / "accuracy.png"
+            if accuracy_path.exists():
+                with open(accuracy_path, "rb") as f:
+                    graphs["accuracy"] = base64.b64encode(f.read()).decode("utf-8")
+
+            # Read loss graph
+            loss_path = graphs_dir / "loss.png"
+            if loss_path.exists():
+                with open(loss_path, "rb") as f:
+                    graphs["loss"] = base64.b64encode(f.read()).decode("utf-8")
+
+            # Read confusion matrix
+            matrix_path = graphs_dir / "confusion_matrix.png"
+            if matrix_path.exists():
+                with open(matrix_path, "rb") as f:
+                    graphs["confusion_matrix"] = base64.b64encode(f.read()).decode("utf-8")
+
+        if not graphs:
+            return {
+                "status": "success",
+                "message": f"No training graphs found for model '{model_id}'",
+                "graphs": {}
+            }
+
+        return {
+            "status": "success",
+            "model_id": model_id,
+            "graphs": graphs,
+            "artifacts": [
+                {"type": "image", "name": "Training Accuracy", "data": graphs.get("accuracy"), "format": "png"} if graphs.get("accuracy") else None,
+                {"type": "image", "name": "Training Loss", "data": graphs.get("loss"), "format": "png"} if graphs.get("loss") else None,
+                {"type": "image", "name": "Confusion Matrix", "data": graphs.get("confusion_matrix"), "format": "png"} if graphs.get("confusion_matrix") else None,
+            ]
+        }
+
+    except Exception as e:
+        return {"status": "error", "error_message": str(e)}
+
+
+def get_report_url(model_id: str) -> dict:
+    """
+    Get the URL to view/download a training report PDF for a model.
+
+    Args:
+        model_id: The model ID (folder name, e.g., "cnn_crushcore_disbond")
+
+    Returns:
+        dict: Contains the report URL and metadata for displaying a "View Report" button.
+
+    Returns an artifact that can be rendered as a clickable button in the chat UI.
+    """
+    try:
+        model_dir = MODELS_DIR / model_id
+
+        if not model_dir.exists():
+            return {"status": "error", "error_message": f"Model '{model_id}' not found"}
+
+        # Find PDF reports
+        pdf_files = list(model_dir.glob("*.pdf"))
+
+        if not pdf_files:
+            return {
+                "status": "success",
+                "message": f"No training report found for model '{model_id}'",
+                "has_report": False
+            }
+
+        report_file = pdf_files[0]
+        report_url = f"/api/reports/{model_id}/{report_file.name}"
+
+        return {
+            "status": "success",
+            "model_id": model_id,
+            "has_report": True,
+            "report_name": report_file.name,
+            "report_url": report_url,
+            "artifacts": [
+                {
+                    "type": "report",
+                    "name": f"Training Report: {model_id}",
+                    "url": report_url,
+                    "filename": report_file.name
+                }
+            ]
+        }
+
+    except Exception as e:
+        return {"status": "error", "error_message": str(e)}
+
+
+def read_report(model_id: str) -> dict:
+    """
+    Read and extract the text content from a model's training report PDF.
+
+    Args:
+        model_id: The model ID (folder name, e.g., "cnn_crushcore_disbond")
+
+    Returns:
+        dict: Contains the extracted text content from the report.
+              Use this to answer user questions about a specific training report.
+
+    This tool allows you to read the full content of a training report so you can:
+    - Answer questions about the model's performance
+    - Explain insights and recommendations from the report
+    - Summarize the training results
+    - Compare metrics mentioned in the report
+    """
+    try:
+        import fitz  # PyMuPDF
+
+        model_dir = MODELS_DIR / model_id
+
+        if not model_dir.exists():
+            return {"status": "error", "error_message": f"Model '{model_id}' not found"}
+
+        # Find PDF reports
+        pdf_files = list(model_dir.glob("*.pdf"))
+
+        if not pdf_files:
+            return {
+                "status": "error",
+                "error_message": f"No training report found for model '{model_id}'"
+            }
+
+        report_file = pdf_files[0]
+
+        # Extract text from PDF
+        doc = fitz.open(str(report_file))
+        text_content = []
+
+        for page_num, page in enumerate(doc, 1):
+            page_text = page.get_text()
+            if page_text.strip():
+                text_content.append(f"--- Page {page_num} ---\n{page_text}")
+
+        doc.close()
+
+        full_text = "\n\n".join(text_content)
+
+        return {
+            "status": "success",
+            "model_id": model_id,
+            "report_name": report_file.name,
+            "content": full_text,
+            "page_count": len(text_content)
+        }
+
+    except ImportError:
+        return {
+            "status": "error",
+            "error_message": "PDF reading library (PyMuPDF) not installed. Run: pip install pymupdf"
+        }
+    except Exception as e:
+        return {"status": "error", "error_message": str(e)}
+
+
 def list_reports() -> dict:
     """
     Get all training reports that have been generated.
@@ -1904,13 +2089,18 @@ When information is missing, ask in plain language:
 2. Ask: CNN or ResNet?
 3. Ask: What name?
 4. Start training
-5. Report when done
+5. **CRITICAL - When training completes, ALWAYS do ALL of the following:**
+   - Tell the user the training is complete with the accuracy (e.g., "Great news! Your model finished training with 95% accuracy!")
+   - **IMMEDIATELY** use `get_model_graphs(model_id)` to show the training graphs (accuracy, loss, confusion matrix)
+   - **IMMEDIATELY** use `get_report_url(model_id)` to provide the View Report button
+   - After showing graphs and report, say something like: "You can click 'View' on the report to see detailed insights. Would you like me to explain anything about the results, or are you ready to test this model with some data?"
 
 ### Testing Data
 1. Show available models
 2. Ask which model to use
 3. Run the test
 4. Explain results clearly
+5. After explaining, suggest: "Would you like to test another file, or see the model's training details?"
 
 ### Adding New Data
 1. User provides folder location
@@ -1918,12 +2108,61 @@ When information is missing, ask in plain language:
 3. Confirm with user
 4. Import the data
 5. Confirm it's ready
+6. Suggest next step: "Your data is ready! Would you like to train a model using this data?"
 
 ## Keep It Simple
 - CNN = faster, good for most cases
 - ResNet = more powerful, takes longer
 - Training takes a few minutes
 - Always explain results in plain terms
+
+## Showing Graphs and Reports
+When the user asks to see training graphs, model performance, or results:
+- Use `get_model_graphs(model_id)` to retrieve training visualization images
+- Use `get_report_url(model_id)` to provide a View Report button in the chat
+- These tools return "artifacts" that will be displayed as images or clickable buttons in the chat
+
+For example:
+- "Show me how the model trained" → use get_model_graphs
+- "Let me see the training report" → use get_report_url
+- "Show the accuracy graph" → use get_model_graphs
+
+## Reading and Answering Questions About Reports
+When users want to know more about a training report or ask questions about it:
+- Use `read_report(model_id)` to read the full text content of the PDF report
+- After reading, you can answer specific questions about:
+  - Model performance and accuracy
+  - Insights and recommendations from the report
+  - Training metrics and statistics
+  - Any other details mentioned in the report
+- This is useful when users say things like:
+  - "What does the report say about accuracy?"
+  - "Summarize the training report"
+  - "What recommendations does the report have?"
+  - "Tell me about the model's performance"
+
+## Proactive Guidance
+Be a helpful guide throughout the user's workflow. You are their AI assistant that helps them through the entire machine learning pipeline!
+
+**IMPORTANT: Always suggest logical next steps:**
+- After training completes: Always show the graphs AND provide the report button, then offer to explain or answer questions. Say: "Click 'View' to see the full report in the chat, or ask me any questions about the results!"
+- After showing graphs: Ask if they'd like to see the detailed report or have any questions
+- After showing a report: Offer to explain any part of it or answer questions about the model's performance
+- After a test/inference: Explain the results clearly, then suggest: "Would you like to test another file or train a new model?"
+- If the user seems stuck: Suggest next steps based on context (e.g., "Would you like to test this model with some data?")
+- When user asks about a report: Use `read_report(model_id)` to read the report content, then answer their questions based on what's in the report
+
+**Pipeline Flow Suggestions:**
+1. New user → Suggest checking available data or importing new data
+2. Has data, no models → Suggest training a model
+3. Has trained model → Suggest testing with new data or viewing reports
+4. After testing → Explain results and suggest next actions
+
+## Handling File References
+When users attach files or reference file paths in their messages:
+- The file paths will be provided in the message
+- Use the appropriate tool based on context (run_inference for testing, browse_directories for exploring)
+- Acknowledge the files they referenced before performing actions
 
 Be helpful, friendly, and guide users step by step.
 When something goes wrong, explain simply and suggest what to try next."""
@@ -1965,6 +2204,9 @@ ALL_TOOLS = [
     explain_results,
 
     # Reporting & System
+    get_model_graphs,
+    get_report_url,
+    read_report,
     list_reports,
     get_system_status,
 ]

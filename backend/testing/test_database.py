@@ -403,6 +403,29 @@ class TestDatabase:
         else:
             raise ValueError(f"Chunk {chunk_idx} not found for test {test_id}")
 
+    def update_test_notes(self, test_id: str, notes: str):
+        """
+        Update notes for a test.
+
+        Args:
+            test_id: Test identifier
+            notes: New notes text
+        """
+        metadata_file = self.metadata_path / f"{test_id}.json"
+        if not metadata_file.exists():
+            raise ValueError(f"Test {test_id} not found in database")
+
+        # Load metadata
+        with open(metadata_file, 'r') as f:
+            data = json.load(f)
+
+        # Update notes
+        data['notes'] = notes
+
+        # Save metadata
+        with open(metadata_file, 'w') as f:
+            json.dump(data, f, indent=2)
+
     def delete_test(self, test_id: str):
         """
         Delete a test and all its associated data.

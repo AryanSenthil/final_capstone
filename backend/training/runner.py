@@ -15,6 +15,7 @@ from typing import Optional, Union, List
 from dataclasses import dataclass, field
 
 from settings.constants import OPENAI_MODEL
+from .gpu_utils import configure_gpu_memory, clear_gpu_memory, handle_gpu_oom_error
 
 
 @dataclass
@@ -140,18 +141,32 @@ def run_training(
         print(f"Save directory: {save_dir}")
         print(f"Timestamp: {datetime.now().isoformat()}")
         print(f"{'='*60}\n")
-    
-    # Run training with stdout capture
-    training_result, training_log = capture_output(
-        module.run_pipeline,
-        paths=paths,
-        save_dir=save_dir,
-        model_name=model_name,
-        data_config=data_config,
-        model_config=model_config,
-        verbose=True,  # Always verbose inside capture
-        extra_callbacks=extra_callbacks,
-    )
+
+    # Configure GPU memory before training
+    configure_gpu_memory(enable_growth=True)
+
+    # Run training with stdout capture and error handling
+    try:
+        training_result, training_log = capture_output(
+            module.run_pipeline,
+            paths=paths,
+            save_dir=save_dir,
+            model_name=model_name,
+            data_config=data_config,
+            model_config=model_config,
+            verbose=True,  # Always verbose inside capture
+            extra_callbacks=extra_callbacks,
+        )
+    except Exception as e:
+        # Handle GPU OOM errors with user-friendly message
+        error_msg = handle_gpu_oom_error(e)
+        if "Out of Memory" in error_msg:
+            print(error_msg)
+            clear_gpu_memory()
+        raise
+    finally:
+        # Always clear GPU memory after training
+        clear_gpu_memory()
     
     # Generate friendly model name first (used for both report and metadata)
     from .report import _generate_model_name, _generate_filename_from_model_name

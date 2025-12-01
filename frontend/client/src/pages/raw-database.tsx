@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { RawFolder } from "@/lib/mockData";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Folder,
   ChevronDown,
@@ -16,7 +24,9 @@ import {
   Download,
   Calendar,
   HardDrive,
-  Loader2
+  Loader2,
+  Search,
+  ArrowUpDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +37,9 @@ export default function RawDatabasePage() {
   const [downloadingFiles, setDownloadingFiles] = useState<Record<string, boolean>>({});
   // Track downloading state for "Download All" per folder
   const [downloadingFolders, setDownloadingFolders] = useState<Record<string, boolean>>({});
+  // Search and sort state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("date-desc");
 
   const handleDownloadFile = async (folderId: string, filename: string) => {
     const key = `${folderId}-${filename}`;
@@ -68,6 +81,42 @@ export default function RawDatabasePage() {
     queryKey: ["/api/raw-database"],
   });
 
+  // Filter and sort folders
+  const filteredFolders = useMemo(() => {
+    if (!rawFolders) return [];
+
+    let result = [...rawFolders];
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(folder =>
+        folder.name.toLowerCase().includes(query)
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "date-asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "files-desc":
+          return b.fileCount - a.fileCount;
+        case "files-asc":
+          return a.fileCount - b.fileCount;
+        case "date-desc":
+        default:
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+    });
+
+    return result;
+  }, [rawFolders, searchQuery, sortBy]);
+
   const toggleFolder = (id: string) => {
     setExpandedFolders(prev => ({
       ...prev,
@@ -95,7 +144,7 @@ export default function RawDatabasePage() {
   const folders = rawFolders || [];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-6">
         <div className="space-y-1">
@@ -106,15 +155,50 @@ export default function RawDatabasePage() {
         </div>
       </div>
 
+      {/* Search and Filter Bar */}
+      {rawFolders && rawFolders.length > 0 && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search folders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10"
+            />
+          </div>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[180px] h-10">
+              <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">Newest First</SelectItem>
+              <SelectItem value="date-asc">Oldest First</SelectItem>
+              <SelectItem value="name-asc">Name A-Z</SelectItem>
+              <SelectItem value="name-desc">Name Z-A</SelectItem>
+              <SelectItem value="files-desc">Most Files</SelectItem>
+              <SelectItem value="files-asc">Fewest Files</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* List View */}
-      {folders.length === 0 ? (
+      {!rawFolders || rawFolders.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-[30vh] gap-3 text-muted-foreground">
           <p className="text-lg font-medium">No raw data folders found</p>
           <p className="text-sm">Import data using the "Add Data" button to see raw files here</p>
         </div>
+      ) : filteredFolders.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-[30vh] gap-3 text-muted-foreground">
+          <Search className="h-12 w-12 opacity-50" />
+          <p className="text-lg font-medium">No results found</p>
+          <p className="text-sm">Try adjusting your search terms</p>
+        </div>
       ) : (
         <div className="space-y-4">
-          {folders.map((folder) => (
+          {filteredFolders.map((folder) => (
             <Collapsible
               key={folder.id}
               open={expandedFolders[folder.id]}

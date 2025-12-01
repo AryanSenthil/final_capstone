@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useTheme } from "next-themes";
-import { Database, FileText, Menu, X, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, Sun, Moon, Network, Layers, ScrollText, FlaskConical, Settings, MessageSquare } from "lucide-react";
+import { Database, FileText, Menu, X, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, Sun, Moon, Network, Layers, ScrollText, FlaskConical, Settings, MessageSquare, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsDialog } from "@/components/settings-dialog";
+import { ApiKeyDialog } from "@/components/api-key-dialog";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiKeyOpen, setApiKeyOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   const navItems = [
@@ -76,6 +78,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Sidebar Footer / Collapse Toggle */}
         <div className="p-2 border-t border-sidebar-border flex flex-col gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isCollapsed ? "px-0" : "justify-start")}
+            onClick={() => setApiKeyOpen(true)}
+            title="OpenAI API Key"
+          >
+            <Key className="h-4 w-4" />
+            {!isCollapsed && <span className="ml-2">API Key</span>}
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
@@ -157,6 +170,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Settings Dialog */}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      {/* API Key Dialog */}
+      <ApiKeyDialog open={apiKeyOpen} onOpenChange={setApiKeyOpen} />
     </div>
   );
 }

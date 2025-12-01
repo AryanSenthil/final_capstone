@@ -139,6 +139,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     saveMutation.mutate();
   };
 
+  const handleResetToDefaults = () => {
+    setSelectedTimeWindow(10);
+    setSelectedDuration("standard"); // 1000 epochs
+    setSelectedSplit(0.2); // 20%
+    setHasChanges(true);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[540px]">
@@ -229,28 +236,38 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="flex justify-between gap-2">
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={handleResetToDefaults}
+            disabled={isLoading}
             className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
           >
-            Cancel
+            Reset to Defaults
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || saveMutation.isPending}
-            className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
-          >
-            {saveMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!hasChanges || saveMutation.isPending}
+              className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+            >
+              {saveMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

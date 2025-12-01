@@ -23,13 +23,31 @@ import {
   AlertCircle,
   Wrench,
   RefreshCw,
+  Paperclip,
+  FileText,
+  Download,
+  ExternalLink,
+  Folder,
+  Home,
+  ChevronLeft,
+  Image as ImageIcon,
+  ZoomIn,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 // Types
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  artifacts?: Artifact[];
+  attachments?: Attachment[];
 }
 
 interface ChatSession {
@@ -43,6 +61,27 @@ interface ToolCall {
   name: string;
   arguments: Record<string, any>;
   result?: any;
+}
+
+interface Artifact {
+  type: "image" | "report";
+  name: string;
+  data?: string; // base64 for images
+  format?: string; // png, jpg, etc
+  url?: string; // for reports
+  filename?: string;
+}
+
+interface Attachment {
+  type: "file";
+  path: string;
+  name: string;
+}
+
+interface DirectoryItem {
+  name: string;
+  path: string;
+  isDirectory: boolean;
 }
 
 // API functions
@@ -166,6 +205,420 @@ const markdownComponents = {
   ),
 };
 
+// Artifact Components - Claude-style image and report displays
+function ImageArtifact({ artifact, onExpand }: { artifact: Artifact; onExpand: () => void }) {
+  if (!artifact.data) return null;
+
+  return (
+    <div className="relative group my-3 max-w-md">
+      <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+        <img
+          src={`data:image/${artifact.format || "png"};base64,${artifact.data}`}
+          alt={artifact.name}
+          className="w-full h-auto cursor-pointer hover:opacity-95 transition-opacity"
+          onClick={onExpand}
+        />
+      </div>
+      <div className="flex items-center justify-between mt-2 px-1">
+        <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <ImageIcon className="w-3 h-3" />
+          {artifact.name}
+        </span>
+        <button
+          onClick={onExpand}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <ZoomIn className="w-3 h-3" />
+          Expand
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReportArtifact({ artifact, onView }: { artifact: Artifact; onView: () => void }) {
+  if (!artifact.url) return null;
+
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(artifact.url!);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = artifact.filename || "report.pdf";
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        link.remove();
+      }
+    } catch (error) {
+      console.error('Failed to download report:', error);
+    }
+  };
+
+  return (
+    <div className="my-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800/50">
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+          <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-medium text-slate-900 dark:text-white truncate">
+            {artifact.name}
+          </h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            PDF Training Report
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onView}
+            className="gap-1.5 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            View
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            className="gap-1.5 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArtifactsDisplay({
+  artifacts,
+  onImageExpand,
+  onReportView,
+}: {
+  artifacts: Artifact[];
+  onImageExpand: (artifact: Artifact) => void;
+  onReportView: (artifact: Artifact) => void;
+}) {
+  if (!artifacts || artifacts.length === 0) return null;
+
+  const images = artifacts.filter((a) => a.type === "image" && a.data);
+  const reports = artifacts.filter((a) => a.type === "report" && a.url);
+
+  return (
+    <div className="mt-4 space-y-3">
+      {/* Image Grid - show multiple images side by side */}
+      {images.length > 0 && (
+        <div className={cn(
+          "grid gap-3",
+          images.length === 1 ? "grid-cols-1" : images.length === 2 ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-3"
+        )}>
+          {images.map((artifact, idx) => (
+            <ImageArtifact
+              key={idx}
+              artifact={artifact}
+              onExpand={() => onImageExpand(artifact)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Reports */}
+      {reports.map((artifact, idx) => (
+        <ReportArtifact key={idx} artifact={artifact} onView={() => onReportView(artifact)} />
+      ))}
+    </div>
+  );
+}
+
+// Image Expand Modal
+function ImageExpandModal({
+  open,
+  onClose,
+  artifact,
+}: {
+  open: boolean;
+  onClose: () => void;
+  artifact: Artifact | null;
+}) {
+  if (!artifact || !artifact.data) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+        <DialogHeader className="p-4 pb-2">
+          <DialogTitle className="text-base font-medium flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" />
+            {artifact.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="px-4 pb-4 overflow-auto">
+          <img
+            src={`data:image/${artifact.format || "png"};base64,${artifact.data}`}
+            alt={artifact.name}
+            className="w-full h-auto rounded-lg"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Report Viewer Modal - View PDFs in chat like training/reports pages
+function ReportViewerModal({
+  open,
+  onClose,
+  artifact,
+}: {
+  open: boolean;
+  onClose: () => void;
+  artifact: Artifact | null;
+}) {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadComplete, setDownloadComplete] = useState(false);
+
+  if (!artifact || !artifact.url) return null;
+
+  const handleDownload = async () => {
+    if (!artifact.url || isDownloading) return;
+    setIsDownloading(true);
+    setDownloadComplete(false);
+    try {
+      const response = await fetch(artifact.url);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = artifact.filename || 'report.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        setDownloadComplete(true);
+        setTimeout(() => setDownloadComplete(false), 2000);
+      }
+    } catch (error) {
+      console.error('Failed to download report:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Build the view URL - convert download URL to view URL if needed
+  const viewUrl = artifact.url.includes('/download?')
+    ? artifact.url.replace('/download?', '/view?')
+    : artifact.url;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden bg-zinc-100 dark:bg-zinc-900 gap-0 border-none outline-none">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-background border-b shrink-0">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <span className="bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded text-xs font-bold">PDF</span>
+            {artifact.filename || artifact.name || 'Training Report'}
+          </h2>
+          <div className="flex items-center gap-2 mr-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 gap-1.5 transition-all duration-200",
+                "hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-md",
+                "active:scale-95 active:shadow-sm",
+                isDownloading && "opacity-70 cursor-wait",
+                downloadComplete && "bg-green-500 text-white border-green-500 hover:bg-green-600"
+              )}
+              onClick={handleDownload}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Downloading...
+                </>
+              ) : downloadComplete ? (
+                <>
+                  <CheckCircle2 size={14} /> Downloaded
+                </>
+              ) : (
+                <>
+                  <Download size={14} /> Download
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* PDF Viewer */}
+        <div className="flex-1 overflow-auto bg-zinc-200/50 dark:bg-zinc-950/50 p-4 flex justify-center">
+          <iframe
+            src={`${viewUrl}#toolbar=0&navpanes=0`}
+            className="w-full h-full bg-white rounded shadow-xl"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// File Browser Dialog for Attachments
+function FileBrowserDialog({
+  open,
+  onClose,
+  onSelectFile,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSelectFile: (path: string, name: string) => void;
+}) {
+  const [currentPath, setCurrentPath] = useState("");
+  const [items, setItems] = useState<DirectoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchDirectory = useCallback(async (path: string) => {
+    setLoading(true);
+    try {
+      const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
+      const res = await fetch(url);
+      const data = await res.json();
+      // API returns array directly
+      if (Array.isArray(data)) {
+        setItems(data);
+        setCurrentPath(path);
+      }
+    } catch (error) {
+      console.error("Failed to browse directory:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      fetchDirectory(currentPath);
+    }
+  }, [open, fetchDirectory]);
+
+  const handleNavigate = (path: string) => {
+    fetchDirectory(path);
+  };
+
+  const handleGoHome = () => {
+    fetchDirectory("");
+  };
+
+  const handleGoUp = () => {
+    const parentPath = currentPath.split("/").slice(0, -1).join("/") || "";
+    fetchDirectory(parentPath);
+  };
+
+  const directories = items.filter((item) => item.isDirectory && item.name !== "..");
+  const files = items.filter((item) => !item.isDirectory);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[80vh] p-0 overflow-hidden">
+        <DialogHeader className="p-4 pb-2 border-b border-border">
+          <DialogTitle className="text-base font-medium">
+            Select a File to Reference
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Navigation */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGoHome}
+            className="h-8 px-2 hover:scale-105 active:scale-95 transition-all"
+          >
+            <Home className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGoUp}
+            disabled={!currentPath}
+            className="h-8 px-2 hover:scale-105 active:scale-95 transition-all"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 px-3 py-1.5 bg-background rounded border text-sm font-mono truncate">
+            {currentPath || "~ (Home)"}
+          </div>
+        </div>
+
+        {/* Directory listing */}
+        <ScrollArea className="h-[400px]">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="p-2 space-y-1">
+              {/* Parent directory link */}
+              {currentPath && (
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted transition-colors text-muted-foreground"
+                  onClick={handleGoUp}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="flex-1 text-sm">..</span>
+                </div>
+              )}
+
+              {directories.map((item) => (
+                <div
+                  key={item.path}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleNavigate(item.path)}
+                >
+                  <Folder className="h-4 w-4 text-blue-500" />
+                  <span className="flex-1 text-sm truncate">{item.name}</span>
+                </div>
+              ))}
+
+              {files.map((item) => (
+                <div
+                  key={item.path}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors group"
+                >
+                  <FileText className="h-4 w-4 text-slate-400" />
+                  <span className="flex-1 text-sm truncate">{item.name}</span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      onSelectFile(item.path, item.name);
+                      onClose();
+                    }}
+                    className="h-7 px-3 text-xs opacity-0 group-hover:opacity-100 hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+                  >
+                    Select
+                  </Button>
+                </div>
+              ))}
+
+              {directories.length === 0 && files.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  This directory is empty
+                </div>
+              )}
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Message Component - Claude/ChatGPT style (no bubbles for assistant)
 function MessageBubble({
   role,
@@ -174,6 +627,10 @@ function MessageBubble({
   toolCalls,
   isLastAssistant,
   onRegenerate,
+  artifacts,
+  onImageExpand,
+  onReportView,
+  attachments,
 }: {
   role: "user" | "assistant";
   content?: string;
@@ -181,13 +638,33 @@ function MessageBubble({
   toolCalls?: ToolCall[];
   isLastAssistant?: boolean;
   onRegenerate?: () => void;
+  artifacts?: Artifact[];
+  onImageExpand?: (artifact: Artifact) => void;
+  onReportView?: (artifact: Artifact) => void;
+  attachments?: Attachment[];
 }) {
   if (role === "user") {
     // User messages: right-aligned with bubble
     return (
       <div className="flex justify-end mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <div className="max-w-[80%] bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-tr-sm text-[15px] leading-relaxed">
-          <span className="whitespace-pre-wrap">{content}</span>
+        <div className="max-w-[80%]">
+          {/* Attachments */}
+          {attachments && attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2 justify-end">
+              {attachments.map((att, idx) => (
+                <div
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 bg-primary/20 text-primary-foreground/80 px-2.5 py-1 rounded-lg text-xs"
+                >
+                  <FileText className="w-3 h-3" />
+                  <span className="truncate max-w-[200px]">{att.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-tr-sm text-[15px] leading-relaxed">
+            <span className="whitespace-pre-wrap">{content}</span>
+          </div>
         </div>
       </div>
     );
@@ -233,6 +710,12 @@ function MessageBubble({
           <div className="text-[15px]">
             <ReactMarkdown components={markdownComponents}>{content}</ReactMarkdown>
           </div>
+
+          {/* Artifacts (images, reports) */}
+          {artifacts && artifacts.length > 0 && onImageExpand && onReportView && (
+            <ArtifactsDisplay artifacts={artifacts} onImageExpand={onImageExpand} onReportView={onReportView} />
+          )}
+
           {/* Regenerate button - only on last assistant message */}
           {isLastAssistant && onRegenerate && (
             <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -284,16 +767,22 @@ function SuggestionButtons({ onSelect }: { onSelect: (action: string) => void })
 function ChatInput({
   onSend,
   disabled,
+  attachments,
+  onAttach,
+  onRemoveAttachment,
 }: {
-  onSend: (message: string) => void;
+  onSend: (message: string, attachments?: Attachment[]) => void;
   disabled?: boolean;
+  attachments?: Attachment[];
+  onAttach?: () => void;
+  onRemoveAttachment?: (index: number) => void;
 }) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {
-    if (input.trim() && !disabled) {
-      onSend(input);
+    if ((input.trim() || (attachments && attachments.length > 0)) && !disabled) {
+      onSend(input, attachments);
       setInput("");
     }
   };
@@ -314,7 +803,45 @@ function ChatInput({
 
   return (
     <div className="relative w-full max-w-7xl mx-auto">
+      {/* Attachments preview */}
+      {attachments && attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2 px-2">
+          {attachments.map((att, idx) => (
+            <div
+              key={idx}
+              className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700"
+            >
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              <span className="truncate max-w-[200px]">{att.name}</span>
+              {onRemoveAttachment && (
+                <button
+                  onClick={() => onRemoveAttachment(idx)}
+                  className="ml-1 hover:text-red-500 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="relative flex items-end gap-2 bg-slate-50 dark:bg-secondary/40 border border-slate-200 dark:border-border/60 rounded-2xl p-2 shadow-sm focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 transition-all">
+        {/* Attach button */}
+        {onAttach && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onAttach}
+            disabled={disabled}
+            className="h-9 w-9 rounded-xl shrink-0 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+            title="Attach a file"
+          >
+            <Paperclip className="w-4 h-4" />
+          </Button>
+        )}
+
         <Textarea
           ref={textareaRef}
           value={input}
@@ -328,11 +855,11 @@ function ChatInput({
 
         <Button
           onClick={handleSubmit}
-          disabled={!input.trim() || disabled}
+          disabled={(!input.trim() && (!attachments || attachments.length === 0)) || disabled}
           size="icon"
           className={cn(
             "h-9 w-9 rounded-xl shrink-0 transition-all duration-200",
-            input.trim()
+            input.trim() || (attachments && attachments.length > 0)
               ? "bg-primary text-primary-foreground hover:scale-105"
               : "bg-secondary/60 text-muted-foreground"
           )}
@@ -350,6 +877,7 @@ const SESSION_STORAGE_KEY = "aryan-senthil-chat-session";
 // Main Chat Page Component
 export default function ChatPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
     // Load from localStorage on initial render
     if (typeof window !== "undefined") {
@@ -362,6 +890,13 @@ export default function ChatPage() {
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Artifacts and attachments state
+  const [currentArtifacts, setCurrentArtifacts] = useState<Artifact[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [expandedImage, setExpandedImage] = useState<Artifact | null>(null);
+  const [viewingReport, setViewingReport] = useState<Artifact | null>(null);
 
   // Track sessions created during streaming (don't fetch these - we have local state)
   const newSessionCreatedRef = useRef<string | null>(null);
@@ -431,6 +966,8 @@ export default function ChatPage() {
     setMessages([]);
     setCurrentToolCalls([]);
     setStreamingContent("");
+    setCurrentArtifacts([]);
+    setPendingAttachments([]);
   };
 
   const handleSelectSession = (id: string) => {
@@ -438,6 +975,8 @@ export default function ChatPage() {
       setCurrentSessionId(id);
       setCurrentToolCalls([]);
       setStreamingContent("");
+      setCurrentArtifacts([]);
+      setPendingAttachments([]);
     }
   };
 
@@ -447,18 +986,34 @@ export default function ChatPage() {
   };
 
   const handleSendMessage = useCallback(
-    async (text: string) => {
-      const userMsg: ChatMessage = { role: "user", content: text };
+    async (text: string, attachments?: Attachment[]) => {
+      // Build message content with attachments reference
+      let messageContent = text;
+      if (attachments && attachments.length > 0) {
+        const fileRefs = attachments.map((a) => `[File: ${a.path}]`).join("\n");
+        messageContent = attachments.length > 0 && text
+          ? `${text}\n\nReferenced files:\n${fileRefs}`
+          : text || `Please analyze these files:\n${fileRefs}`;
+      }
+
+      const userMsg: ChatMessage = {
+        role: "user",
+        content: messageContent,
+        attachments: attachments
+      };
       setMessages((prev) => [...prev, userMsg]);
       setIsStreaming(true);
       setCurrentToolCalls([]);
       setStreamingContent("");
+      setCurrentArtifacts([]);
+      setPendingAttachments([]); // Clear attachments after sending
 
       try {
         let newSessionId = currentSessionId;
         let fullContent = "";
+        let collectedArtifacts: Artifact[] = [];
 
-        for await (const event of streamChat(text, currentSessionId || undefined)) {
+        for await (const event of streamChat(messageContent, currentSessionId || undefined)) {
           switch (event.type) {
             case "session":
               newSessionId = event.data.session_id;
@@ -484,22 +1039,43 @@ export default function ChatPage() {
               );
               break;
 
+            case "artifact":
+              // Collect artifacts from tool results
+              if (event.data.artifact) {
+                collectedArtifacts.push(event.data.artifact);
+                setCurrentArtifacts((prev) => [...prev, event.data.artifact]);
+              }
+              break;
+
             case "content":
               fullContent += event.data.content;
               setStreamingContent(fullContent);
               break;
 
             case "done":
-              setMessages((prev) => [...prev, { role: "assistant", content: fullContent }]);
+              setMessages((prev) => [...prev, {
+                role: "assistant",
+                content: fullContent,
+                artifacts: collectedArtifacts.length > 0 ? collectedArtifacts : undefined
+              }]);
               setStreamingContent("");
               setCurrentToolCalls([]);
+              setCurrentArtifacts([]);
               refetchSessions();
               break;
 
             case "error":
+              // Show toast notification for API errors
+              const errorMsg = event.data.error || event.data.message || "Unknown error";
+              toast({
+                title: "Error",
+                description: errorMsg,
+                variant: "destructive",
+                duration: 8000, // Longer duration for API errors
+              });
               setMessages((prev) => [
                 ...prev,
-                { role: "assistant", content: `Error: ${event.data.message}` },
+                { role: "assistant", content: `Error: ${errorMsg}` },
               ]);
               break;
           }
@@ -546,6 +1122,23 @@ export default function ChatPage() {
   const getTabTitle = (session: ChatSession) => {
     const title = session.title || "New Session";
     return title.length > 35 ? title.slice(0, 35) + "..." : title;
+  };
+
+  // Attachment handlers
+  const handleAddAttachment = (path: string, name: string) => {
+    setPendingAttachments((prev) => [...prev, { type: "file", path, name }]);
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleImageExpand = (artifact: Artifact) => {
+    setExpandedImage(artifact);
+  };
+
+  const handleReportView = (artifact: Artifact) => {
+    setViewingReport(artifact);
   };
 
   return (
@@ -646,6 +1239,10 @@ export default function ChatPage() {
                   content={msg.content}
                   isLastAssistant={isLastAssistant}
                   onRegenerate={isLastAssistant ? handleRegenerate : undefined}
+                  artifacts={msg.artifacts}
+                  onImageExpand={handleImageExpand}
+                  onReportView={handleReportView}
+                  attachments={msg.attachments}
                 />
               );
             })}
@@ -657,6 +1254,9 @@ export default function ChatPage() {
                 content={streamingContent}
                 isLoading={isStreaming && !streamingContent}
                 toolCalls={currentToolCalls}
+                artifacts={currentArtifacts}
+                onImageExpand={handleImageExpand}
+                onReportView={handleReportView}
               />
             )}
 
@@ -668,12 +1268,39 @@ export default function ChatPage() {
         <div className="p-4 border-t border-border/50 bg-background/80 backdrop-blur-sm">
           {(showWelcome || (messages.length > 0 && messages.length < 4)) && !isStreaming && (
             <div className="mb-3 max-w-7xl mx-auto">
-              <SuggestionButtons onSelect={handleSendMessage} />
+              <SuggestionButtons onSelect={(action) => handleSendMessage(action)} />
             </div>
           )}
-          <ChatInput onSend={handleSendMessage} disabled={isStreaming} />
+          <ChatInput
+            onSend={handleSendMessage}
+            disabled={isStreaming}
+            attachments={pendingAttachments}
+            onAttach={() => setShowFileBrowser(true)}
+            onRemoveAttachment={handleRemoveAttachment}
+          />
         </div>
       </div>
+
+      {/* File Browser Dialog */}
+      <FileBrowserDialog
+        open={showFileBrowser}
+        onClose={() => setShowFileBrowser(false)}
+        onSelectFile={handleAddAttachment}
+      />
+
+      {/* Image Expand Modal */}
+      <ImageExpandModal
+        open={expandedImage !== null}
+        onClose={() => setExpandedImage(null)}
+        artifact={expandedImage}
+      />
+
+      {/* Report Viewer Modal */}
+      <ReportViewerModal
+        open={viewingReport !== null}
+        onClose={() => setViewingReport(null)}
+        artifact={viewingReport}
+      />
     </div>
   );
 }

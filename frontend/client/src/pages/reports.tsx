@@ -1,11 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Search, Download, MoreVertical, Loader2, ScrollText, ArrowUpDown } from "lucide-react";
+import { FileText, Search, Download, MoreVertical, Loader2, ScrollText, ArrowUpDown, Trash2, Eye, ExternalLink } from "lucide-react";
 import { ReportModal } from "@/components/training/ReportModal";
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
+import { toast } from "@/hooks/use-toast";
 import {
   Select,
   SelectContent,
@@ -13,6 +14,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Report {
   id: string;
@@ -36,16 +54,58 @@ function formatTrainingTime(seconds?: number): string {
 }
 
 export default function ReportsPage() {
+  const queryClient = useQueryClient();
   const [showReport, setShowReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [sortBy, setSortBy] = useState<string>("date-desc");
   const [modelFilter, setModelFilter] = useState<string>("all");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
 
   const { data: reports = [], isLoading } = useQuery<Report[]>({
     queryKey: ["/api/reports"],
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (report: Report) => {
+      const response = await fetch(`/api/reports/${report.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete report');
+      return response.json();
+    },
+    onSuccess: (_, report) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+      toast({
+        title: "Report Deleted",
+        description: `${report.name} has been removed.`,
+        variant: "destructive"
+      });
+      setDeleteDialogOpen(false);
+      setReportToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    },
+  });
+
+  const handleDeleteClick = (report: Report, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReportToDelete(report);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (reportToDelete) {
+      deleteMutation.mutate(reportToDelete);
+    }
+  };
 
   // Get unique model names for filter dropdown
   const modelNames = useMemo(() => {
@@ -272,14 +332,58 @@ export default function ReportsPage() {
                       >
                         <Download size={16} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover:bg-muted hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
-                        onClick={(e) => { e.stopPropagation(); }}
-                      >
-                        <MoreVertical size={16} />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-muted hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
+                            onClick={(e) => { e.stopPropagation(); }}
+                          >
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewReport(report);
+                            }}
+                            className="gap-2 cursor-pointer focus:bg-primary/10"
+                          >
+                            <Eye size={16} />
+                            View Report
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(report, e as unknown as React.MouseEvent);
+                            }}
+                            className="gap-2 cursor-pointer focus:bg-primary/10"
+                          >
+                            <Download size={16} />
+                            Download PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`/api/training/report/view?path=${encodeURIComponent(report.path)}`, '_blank');
+                            }}
+                            className="gap-2 cursor-pointer focus:bg-primary/10"
+                          >
+                            <ExternalLink size={16} />
+                            Open in New Tab
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => handleDeleteClick(report, e as unknown as React.MouseEvent)}
+                            className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+                          >
+                            <Trash2 size={16} />
+                            Delete Report
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -295,6 +399,27 @@ export default function ReportsPage() {
         modelName={selectedReport?.model_name}
         reportPath={selectedReport?.path}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Report</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <span className="font-semibold text-foreground">{reportToDelete?.name}</span>?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
