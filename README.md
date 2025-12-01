@@ -155,9 +155,11 @@ This project is licensed under a **Research and Educational License**. See [LICE
 
 **For commercial use, please contact the authors.**
 
-## Authors
+## Author
 
-Built with ❤️ for advancing carbon fiber composite research
+**Aryan Senthil**
+
+Developed for advancing carbon fiber composite research and damage detection.
 
 ---
 
