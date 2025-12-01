@@ -86,3 +86,4 @@ letta-client
 # PDF Generation & Google ADK (for training module)
 reportlab
 google-adk
+litellm

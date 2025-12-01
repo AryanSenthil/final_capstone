@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Folder, X, UploadCloud, Loader2, Database, Clock, FileText, Activity, Sparkles, Info, TrendingUp, TrendingDown } from "lucide-react";
+import { Folder, X, UploadCloud, Loader2, Database, Clock, FileText, Activity, Sparkles, Info, Timer } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -170,13 +170,13 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                     <TooltipTrigger asChild>
                       <Badge
                         variant="secondary"
-                        className="pl-2 pr-1 py-0.5 h-6 text-[11px] flex items-center gap-1 group hover:bg-destructive/10 hover:text-destructive transition-colors bg-background border shadow-sm cursor-default"
+                        className="pl-2 pr-1 py-0.5 h-6 text-[11px] flex items-center gap-1 group bg-background border shadow-sm cursor-default text-foreground"
                       >
-                        <span className="truncate max-w-[80px] font-medium">{folder.name}</span>
+                        <span className="truncate max-w-[80px] font-medium text-foreground">{folder.name}</span>
                         <span className="text-muted-foreground text-[9px]">({folder.fileCount})</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); removeFolder(folder.path); }}
-                          className="ml-0.5 rounded-full hover:bg-destructive/20 p-0.5 transition-colors"
+                          className="ml-0.5 rounded-full hover:bg-destructive/20 hover:text-destructive p-0.5 transition-colors"
                         >
                           <X size={10} />
                         </button>
@@ -202,7 +202,7 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                 {selectedFolders.length > 0 ? "Modify Selection" : "Choose Training Data..."}
               </Button>
             </DialogTrigger>
-              <DialogContent className="sm:max-w-2xl">
+              <DialogContent className="sm:max-w-4xl">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
                     <Database size={18} />
@@ -217,7 +217,7 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <ScrollArea className="h-[420px] pr-4">
+                  <ScrollArea className="h-[500px] pr-4">
                     <div className="space-y-3">
                       {tempSelection.length === 0 ? (
                         <div className="text-center py-12 space-y-3">
@@ -331,9 +331,9 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                                     icon={<Activity size={12} />}
                                   />
                                   <MetadataCard
-                                    label="Value Range"
-                                    value={`${folder.metadata.stats.min.toFixed(1)} to ${folder.metadata.stats.max.toFixed(1)}`}
-                                    icon={<TrendingUp size={12} />}
+                                    label="Time Period"
+                                    value={folder.metadata.durationPerChunk}
+                                    icon={<Timer size={12} />}
                                   />
                                 </div>
 
@@ -349,31 +349,6 @@ export function FolderSelector({ selectedFolders, onSelectionChange }: FolderSel
                                 </div>
 
 
-                                {/* Show AI-generated architecture suggestion and quality */}
-                                {(folder.metadata.suggestedArchitecture || folder.metadata.qualityScore !== undefined) && (
-                                  <div className="mt-3 pt-3 border-t border-border/50">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {folder.metadata.suggestedArchitecture && (
-                                        <Badge variant="outline" className="text-[10px] border-primary text-primary">
-                                          Recommended: {folder.metadata.suggestedArchitecture}
-                                        </Badge>
-                                      )}
-                                      {folder.metadata.qualityScore !== undefined && (
-                                        <Badge
-                                          variant="outline"
-                                          className={cn(
-                                            "text-[10px]",
-                                            folder.metadata.qualityScore >= 0.8 ? "border-emerald-500 text-emerald-600" :
-                                            folder.metadata.qualityScore >= 0.6 ? "border-amber-500 text-amber-600" :
-                                            "border-red-500 text-red-600"
-                                          )}
-                                        >
-                                          Quality: {(folder.metadata.qualityScore * 100).toFixed(0)}%
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>

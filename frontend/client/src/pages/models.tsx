@@ -1,11 +1,38 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Download, ArrowRight, Box, Layers, Activity, Trash2, Loader2 } from "lucide-react";
+import { Calendar, Download, ArrowRight, Box, Layers, Activity, Trash2, Loader2, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useState } from "react";
+
+function formatTrainingTime(seconds: number | undefined): string {
+  if (!seconds) return "N/A";
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${secs}s`;
+  } else {
+    return `${secs}s`;
+  }
+}
 
 interface Model {
   id: string;
@@ -16,11 +43,15 @@ interface Model {
   architecture: string;
   status: string;
   path: string;
+  test_accuracy?: string;
+  training_time?: number;  // Training duration in seconds
   report_path: string | null;
 }
 
 export default function ModelsPage() {
   const queryClient = useQueryClient();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [modelToDelete, setModelToDelete] = useState<Model | null>(null);
 
   const { data: models = [], isLoading } = useQuery<Model[]>({
     queryKey: ["/api/models"],
@@ -39,6 +70,8 @@ export default function ModelsPage() {
         description: `${model?.name || modelId} has been removed from registry.`,
         variant: "destructive"
       });
+      setDeleteDialogOpen(false);
+      setModelToDelete(null);
     },
     onError: (error: Error) => {
       toast({
@@ -49,10 +82,17 @@ export default function ModelsPage() {
     },
   });
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDeleteClick = (model: Model, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    deleteMutation.mutate(id);
+    setModelToDelete(model);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (modelToDelete) {
+      deleteMutation.mutate(modelToDelete.id);
+    }
   };
 
   if (isLoading) {
@@ -64,28 +104,31 @@ export default function ModelsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-6">
+    <div className="flex flex-col h-full space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-4">
         <div className="space-y-1">
           <h2 className="text-2xl font-bold tracking-tight text-primary">Model Registry</h2>
           <p className="text-muted-foreground text-base">Manage, version, and deploy trained neural networks.</p>
         </div>
         <div className="flex gap-3">
-           <Button className="rounded-xl shadow-lg shadow-primary/20">Export Catalog</Button>
+           <Button className="rounded-xl shadow-lg shadow-primary/20 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">Downloads</Button>
         </div>
       </div>
 
       {models.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <h3 className="text-lg font-semibold mb-2">No Models Yet</h3>
-          <p className="text-sm">Train your first model to see it here.</p>
-          <Link href="/training">
-            <Button className="mt-4">Go to Training</Button>
-          </Link>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <h3 className="text-lg font-semibold mb-2">No Models Yet</h3>
+            <p className="text-sm">Train your first model to see it here.</p>
+            <Link href="/training">
+              <Button className="mt-4 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">Go to Training</Button>
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pb-12">
+        <div className="flex-1 overflow-y-auto pb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {models.map((model) => (
             <Link key={model.id} href={`/models/${model.id}`}>
               <a className="block h-full group outline-none">
@@ -105,8 +148,8 @@ export default function ModelsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                        onClick={(e) => handleDelete(model.id, e)}
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
+                        onClick={(e) => handleDeleteClick(model, e)}
                         disabled={deleteMutation.isPending}
                       >
                         <Trash2 size={16} />
@@ -115,9 +158,17 @@ export default function ModelsPage() {
                     <CardTitle className="text-xl font-bold font-mono tracking-tight group-hover:text-primary transition-colors">
                       {model.name}
                     </CardTitle>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium pt-1">
-                       <Calendar size={12} />
-                       {model.date}
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium pt-1">
+                       <span className="flex items-center gap-1">
+                         <Calendar size={12} />
+                         {model.date}
+                       </span>
+                       {model.training_time !== undefined && (
+                         <span className="flex items-center gap-1">
+                           <Clock size={12} />
+                           {formatTrainingTime(model.training_time)}
+                         </span>
+                       )}
                     </div>
                   </CardHeader>
 
@@ -139,7 +190,7 @@ export default function ModelsPage() {
                   </CardContent>
 
                   <CardFooter className="pt-4 border-t border-border/40 flex justify-between bg-muted/5">
-                    <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground -ml-2" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 -ml-2" onClick={(e) => e.stopPropagation()}>
                       <Download size={14} /> <span className="text-xs">Weights</span>
                     </Button>
                     <div className="flex items-center gap-1 text-sm font-semibold text-primary opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
@@ -150,8 +201,30 @@ export default function ModelsPage() {
               </a>
             </Link>
           ))}
+          </div>
         </div>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Model</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <span className="font-semibold text-foreground">{modelToDelete?.name}</span>?
+              This action cannot be undone. The model weights, graphs, and all associated data will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

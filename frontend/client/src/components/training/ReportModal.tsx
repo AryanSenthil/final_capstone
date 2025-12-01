@@ -26,7 +26,9 @@ export function ReportModal({ open, onOpenChange, reportPath, modelName }: Repor
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `${modelName || 'training'}_report.pdf`;
+          // Use actual filename from path for consistency
+          const filename = reportPath.split('/').pop() || `${modelName || 'training'}_report.pdf`;
+          a.download = filename;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -48,7 +50,7 @@ export function ReportModal({ open, onOpenChange, reportPath, modelName }: Repor
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-background border-b shrink-0">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-xs font-bold">PDF</span>
+            <span className="bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded text-xs font-bold">PDF</span>
             {modelName ? `${modelName}_Report.pdf` : 'Training_Report.pdf'}
           </h2>
           <div className="flex items-center gap-2 mr-6">

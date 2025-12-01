@@ -82,88 +82,20 @@ def capture_training(
     return result, output_buffer.getvalue()
 
 
-def _generate_title_from_path(save_dir: str, api_key: str = None) -> str:
-    """Use OpenAI to generate a professional title from the save directory name."""
-    import os
-    try:
-        from openai import OpenAI
-    except ImportError:
-        # Fallback if OpenAI not available
-        dir_name = os.path.basename(save_dir.rstrip('/'))
-        return dir_name.replace('_', ' ').replace('-', ' ').title() + " Training Report"
-
-    api_key = api_key or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        dir_name = os.path.basename(save_dir.rstrip('/'))
-        return dir_name.replace('_', ' ').replace('-', ' ').title() + " Training Report"
-
-    try:
-        client = OpenAI(api_key=api_key)
-        dir_name = os.path.basename(save_dir.rstrip('/'))
-
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You generate professional report titles. Respond with ONLY the title, nothing else."
-                },
-                {
-                    "role": "user",
-                    "content": f"Generate a professional training report title from this directory name: '{dir_name}'. Make it clean and formal, suitable for a machine learning research report. Include 'Training Report' at the end."
-                }
-            ],
-            temperature=0.3,
-        )
-        return response.choices[0].message.content.strip().strip('"')
-    except Exception:
-        dir_name = os.path.basename(save_dir.rstrip('/'))
-        return dir_name.replace('_', ' ').replace('-', ' ').title() + " Training Report"
+def _generate_title_from_model_name(model_name: str) -> str:
+    """Generate report title from model name - just use the model name directly."""
+    return model_name
 
 
-def _generate_filename_from_path(save_dir: str, api_key: str = None) -> str:
-    """Use OpenAI to generate a short filename from the save directory name."""
-    import os
+def _generate_filename_from_model_name(model_name: str) -> str:
+    """Generate filename from model name."""
     import re
-
-    dir_name = os.path.basename(save_dir.rstrip('/'))
-    fallback = dir_name.replace(' ', '_').lower() + "_report"
-
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return fallback
-
-    api_key = api_key or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return fallback
-
-    try:
-        client = OpenAI(api_key=api_key)
-
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You generate short filenames. Respond with ONLY the filename, no extension, no explanation. Use lowercase and underscores only."
-                },
-                {
-                    "role": "user",
-                    "content": f"Generate a short PDF filename (max 30 chars, no extension) from this folder name: '{dir_name}'. Keep the key identifier (like 'cnn5' or 'resnet2'). End with '_report'. Example: 'cnn5_report' or 'resnet2_report'."
-                }
-            ],
-            temperature=0.2,
-        )
-        filename = response.choices[0].message.content.strip().strip('"').strip("'")
-        # Sanitize: only allow lowercase, numbers, underscores
-        filename = re.sub(r'[^a-z0-9_]', '_', filename.lower())
-        # Ensure it ends with _report
-        if not filename.endswith('_report'):
-            filename = filename.rstrip('_') + '_report'
-        return filename if filename else fallback
-    except Exception:
-        return fallback
+    # Sanitize: allow lowercase, numbers, underscores, and parentheses
+    # Replace spaces and other chars with underscores, but keep () for names like cnn(2)
+    filename = re.sub(r'[^a-z0-9_()]', '_', model_name.lower())
+    # Clean up multiple underscores
+    filename = re.sub(r'_+', '_', filename).strip('_')
+    return f"{filename}_report" if filename else "model_report"
 
 
 def _generate_model_name(save_dir: str, architecture: str, api_key: str = None) -> str:
@@ -211,8 +143,11 @@ def generate_model_metadata(
     test_accuracy: float,
     test_loss: float,
     training_time: float = 0.0,
+    history: dict = None,
     report_path: str = None,
     api_key: str = None,
+    model_name: str = None,
+    labels: list = None,
 ) -> str:
     """
     Generate model_info.json with OpenAI-generated name.
@@ -223,16 +158,19 @@ def generate_model_metadata(
         test_accuracy: Test accuracy (0-1)
         test_loss: Test loss value
         training_time: Training duration in seconds
+        history: Training history dict with metrics over epochs
         report_path: Path to PDF report (optional)
         api_key: OpenAI API key
+        model_name: Pre-generated model name (optional, will generate if not provided)
+        labels: List of class labels used for training
 
     Returns:
         Path to generated model_info.json
     """
     import json
 
-    # Generate friendly name using OpenAI
-    name = _generate_model_name(save_dir, architecture, api_key=api_key)
+    # Use provided name or generate one
+    name = model_name if model_name else _generate_model_name(save_dir, architecture, api_key=api_key)
 
     metadata = {
         "name": name,
@@ -241,6 +179,7 @@ def generate_model_metadata(
         "test_accuracy": test_accuracy,  # Store both for clarity
         "loss": test_loss,
         "training_time": training_time,
+        "labels": labels or [],
         "created_at": datetime.now().isoformat(),
         "report_path": report_path,
     }
@@ -248,6 +187,12 @@ def generate_model_metadata(
     info_path = os.path.join(save_dir, "model_info.json")
     with open(info_path, "w") as f:
         json.dump(metadata, f, indent=2)
+
+    # Save history separately for interactive charts
+    if history:
+        history_path = os.path.join(save_dir, "training_history.json")
+        with open(history_path, "w") as f:
+            json.dump(history, f, indent=2)
 
     return info_path
 
@@ -289,6 +234,7 @@ def generate_report(
     config: Union[CNNConfig, ResNetConfig, dict],
     save_dir: str,
     report_name: str = "training_report",
+    model_name: str = None,
     use_llm: bool = True,
     llm_model: str = None,
     api_key: Optional[str] = None,
@@ -304,6 +250,7 @@ def generate_report(
         config: Training config (CNNConfig, ResNetConfig, or dict)
         save_dir: Directory to save report
         report_name: Base name for report file
+        model_name: Friendly model name for report title
         use_llm: Whether to use LLM for analysis
         llm_model: OpenAI model to use
         api_key: OpenAI API key
@@ -324,18 +271,24 @@ def generate_report(
         config_dict = {k: getattr(config, k) for k in config.__dataclass_fields__}
     else:
         config_dict = dict(config)
-    
+
+    # Generate title from model name
+    if model_name:
+        report_title = _generate_title_from_model_name(model_name)
+    else:
+        report_title = f"{architecture} Training Report"
+
     # Generate metadata
     now = datetime.now()
     metadata = ReportMetadata(
-        title=f"{architecture} Training Report",
+        title=report_title,
         architecture=architecture,
         timestamp=now.isoformat(),
         date=now.strftime("%B %d, %Y"),
         time=now.strftime("%H:%M:%S"),
         author=author,
     )
-    
+
     # Get LLM analysis
     if use_llm:
         print(f"[INFO] Generating LLM analysis using {llm_model}...")
@@ -364,14 +317,10 @@ def generate_report(
             result=result,
             config=config_dict,
         )
-    
+
     # Build PDF
     os.makedirs(save_dir, exist_ok=True)
     report_path = os.path.join(save_dir, f"{report_name}.pdf")
-
-    # Generate title from save_dir using LLM
-    generated_title = _generate_title_from_path(save_dir, api_key=api_key)
-    metadata.title = generated_title
 
     report = TrainingReportWriter(report_path, title=metadata.title)
 
@@ -509,7 +458,7 @@ def run_pipeline_with_report(
     """
     if model_name is None:
         model_name = f"{architecture.lower()}_model"
-    
+
     # Capture training
     result, terminal_output = capture_training(
         pipeline_func,
@@ -519,21 +468,24 @@ def run_pipeline_with_report(
         model_config=config,
         verbose=verbose,
     )
-    
+
     # Get config dict
     if config is None:
         if architecture.upper() == "CNN":
             config = CNNConfig()
         else:
             config = ResNetConfig()
-    
+
     if hasattr(config, '__dataclass_fields__'):
         config_dict = {k: getattr(config, k) for k in config.__dataclass_fields__}
     else:
         config_dict = dict(config)
-    
-    # Generate report name using OpenAI
-    report_name = _generate_filename_from_path(save_dir, api_key=api_key)
+
+    # Generate friendly model name first
+    friendly_name = _generate_model_name(save_dir, architecture, api_key=api_key)
+
+    # Use model name for report filename and title
+    report_name = _generate_filename_from_model_name(friendly_name)
 
     report_path = generate_report(
         result=result,
@@ -542,13 +494,14 @@ def run_pipeline_with_report(
         config=config,
         save_dir=save_dir,
         report_name=report_name,
+        model_name=friendly_name,
         use_llm=use_llm,
         llm_model=llm_model,
         api_key=api_key,
         author=author,
     )
 
-    # Generate model_info.json for frontend
+    # Generate model_info.json for frontend (reuse the friendly name)
     generate_model_metadata(
         save_dir=save_dir,
         architecture=architecture,
@@ -556,6 +509,7 @@ def run_pipeline_with_report(
         test_loss=result.test_loss,
         report_path=report_path,
         api_key=api_key,
+        model_name=friendly_name,
     )
 
     # Create metadata

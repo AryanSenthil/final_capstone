@@ -56,3 +56,16 @@ cd /home/ari/Documents/final_capstone/backend && .venv/bin/uvicorn api:app --rel
 - **No max_tokens**: The gpt-5.1 model does not support `max_tokens` parameter - never include it
 - **Centralized config**: Model name is defined in `backend/settings/constants.py` as `OPENAI_MODEL`
 - All code must import from constants - never hardcode the model name
+
+## UI Patterns
+
+### Interactive Buttons
+Always add hover/active effects to action buttons (download, submit, etc.) for better UX:
+```tsx
+className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+```
+
+For icon-only buttons:
+```tsx
+className="hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
+```

@@ -66,20 +66,23 @@ export function TrainingProgress({ status, currentStep, currentEpoch, totalEpoch
         })}
       </div>
 
-      <div className="text-center flex items-center justify-center bg-background/50 rounded border border-border/50 py-1.5 px-2 min-h-[28px]">
+      <div className="text-center flex flex-col items-center justify-center bg-background/50 rounded border border-border/50 py-1.5 px-2 min-h-[28px]">
         {status === 'idle' && (
-          <p className="text-[10px] text-muted-foreground">Ready to start</p>
+          <p className="text-[10px] text-muted-foreground">Awaiting training</p>
         )}
         {status === 'training' && (
-          <p className="text-[10px] font-medium text-foreground animate-pulse flex items-center gap-1.5">
-            <Loader2 size={10} className="animate-spin" />
-            {steps[currentStep - 1]?.fullLabel}...
-            {currentStep === 3 && currentEpoch !== undefined && totalEpochs !== undefined && (
-              <span className="font-mono opacity-75 bg-muted px-1 py-0.5 rounded text-[9px]">
-                {currentEpoch}/{totalEpochs}
-              </span>
-            )}
-          </p>
+          <>
+            <p className="text-[10px] font-medium text-foreground animate-pulse flex items-center gap-1.5">
+              <Loader2 size={10} className="animate-spin" />
+              {steps[currentStep - 1]?.fullLabel}...
+              {currentStep === 3 && currentEpoch !== undefined && totalEpochs !== undefined && (
+                <span className="font-mono opacity-75 bg-muted px-1 py-0.5 rounded text-[9px]">
+                  {currentEpoch}/{totalEpochs}
+                </span>
+              )}
+            </p>
+            <p className="text-[9px] text-amber-600 mt-1">Do not navigate away from this page</p>
+          </>
         )}
         {status === 'complete' && (
           <p className="text-[10px] font-medium text-emerald-600 flex items-center justify-center gap-1">

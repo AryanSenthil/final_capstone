@@ -228,6 +228,8 @@ export default function TrainingPage() {
               }
               // Backend saves state when training completes - invalidate query to get fresh state
               queryClient.invalidateQueries({ queryKey: ["/api/training/state"] });
+              // Also refresh the models list so user sees the new model without page reload
+              queryClient.invalidateQueries({ queryKey: ["/api/models"] });
             } else if (data.status === "error") {
               setStatus("error");
               toast({
@@ -372,8 +374,7 @@ export default function TrainingPage() {
           <div className="p-4 flex flex-col h-full gap-3 overflow-y-auto">
             {/* Header - Simple */}
             <div className="shrink-0 pb-2 border-b border-border/50">
-               <h2 className="text-lg font-bold tracking-tight">Train Model</h2>
-               <p className="text-[10px] text-muted-foreground">Configure and start training</p>
+               <h2 className="text-xl font-bold tracking-tight text-primary">Train Model</h2>
             </div>
 
             {/* Model Name Input - Compact */}
@@ -405,7 +406,7 @@ export default function TrainingPage() {
                   onClick={() => generateNameMutation.mutate()}
                   disabled={selectedFolders.length === 0 || generateNameMutation.isPending || status === "training"}
                   title="Generate name using AI"
-                  className="h-8 w-8 shrink-0"
+                  className="h-8 w-8 shrink-0 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
                 >
                   {generateNameMutation.isPending ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -463,7 +464,7 @@ export default function TrainingPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="flex-1 h-8 text-xs bg-white/20 hover:bg-white/30 text-white border-0"
+                      className="flex-1 h-8 text-xs bg-white/20 hover:bg-white/30 text-white border-0 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                       onClick={() => setShowReport(true)}
                     >
                       <FileText size={12} className="mr-1.5" />
@@ -472,7 +473,7 @@ export default function TrainingPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white border-0 p-0"
+                      className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white border-0 p-0 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
                       onClick={handleDownloadReport}
                       title="Download Report"
                     >
@@ -488,7 +489,7 @@ export default function TrainingPage() {
               {status === "idle" && (
                 <Button
                   size="default"
-                  className="w-full gap-2 shadow-lg shadow-primary/20 h-10 text-sm font-semibold rounded-lg transition-all hover:translate-y-[-1px]"
+                  className="w-full gap-2 shadow-lg shadow-primary/20 h-10 text-sm font-semibold rounded-lg transition-all duration-200 hover:shadow-md hover:scale-105 active:scale-95"
                   onClick={startTraining}
                   disabled={selectedFolders.length === 0 || startMutation.isPending}
                 >
@@ -501,7 +502,7 @@ export default function TrainingPage() {
                 <Button
                   size="default"
                   variant="destructive"
-                  className="w-full gap-2 h-10 text-sm font-semibold rounded-lg shadow-lg shadow-destructive/20"
+                  className="w-full gap-2 h-10 text-sm font-semibold rounded-lg shadow-lg shadow-destructive/20 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                   onClick={stopTraining}
                 >
                   <Square size={16} fill="currentColor" />
@@ -513,7 +514,7 @@ export default function TrainingPage() {
                 <Button
                   size="default"
                   variant="outline"
-                  className="w-full gap-1.5 h-10 text-sm font-semibold rounded-lg border-primary/20 hover:bg-primary/5 hover:text-primary"
+                  className="w-full gap-1.5 h-10 text-sm font-semibold rounded-lg border-primary/20 hover:bg-primary/5 hover:text-primary hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                   onClick={resetTraining}
                 >
                   <RotateCcw size={14} />

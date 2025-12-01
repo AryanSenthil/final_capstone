@@ -102,7 +102,7 @@ def run_training(
     # Import here to avoid circular imports
     from . import cnn, resnet
     from .config import CNNConfig, ResNetConfig, DataConfig
-    from .report import generate_report as gen_report, _generate_filename_from_path, generate_model_metadata
+    from .report import generate_report as gen_report, generate_model_metadata
 
     if llm_model is None:
         llm_model = OPENAI_MODEL
@@ -144,15 +144,19 @@ def run_training(
         extra_callbacks=extra_callbacks,
     )
     
+    # Generate friendly model name first (used for both report and metadata)
+    from .report import _generate_model_name, _generate_filename_from_model_name
+    friendly_name = _generate_model_name(save_dir, architecture, api_key=api_key)
+
     # Generate report if requested
     report_path = None
     if generate_report:
         try:
             if verbose:
                 print("\nGenerating PDF report...")
-            
-            # Generate report name using OpenAI
-            report_name = _generate_filename_from_path(save_dir, api_key=api_key)
+
+            # Use model name for report filename
+            report_name = _generate_filename_from_model_name(friendly_name)
 
             report_path = gen_report(
                 result=training_result,
@@ -161,12 +165,13 @@ def run_training(
                 config=model_config,
                 save_dir=save_dir,
                 report_name=report_name,
+                model_name=friendly_name,
                 use_llm=use_llm,
                 llm_model=llm_model,
                 api_key=api_key,
                 author=author,
             )
-            
+
         except ImportError as e:
             if verbose:
                 print(f"[WARNING] Report dependencies missing: {e}")
@@ -180,14 +185,20 @@ def run_training(
         if verbose:
             print("Generating model metadata...")
 
+        # Get labels from training result metadata
+        labels = training_result.metadata.get('class_names', []) if training_result.metadata else []
+
         metadata_path = generate_model_metadata(
             save_dir=save_dir,
             architecture=architecture,
             test_accuracy=training_result.test_accuracy,
             test_loss=training_result.test_loss,
             training_time=training_result.training_time,
+            history=training_result.history,
             report_path=report_path,
             api_key=api_key,
+            model_name=friendly_name,
+            labels=labels,
         )
 
         if verbose:

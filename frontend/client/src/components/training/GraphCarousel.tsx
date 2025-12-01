@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Download, ImageIcon, Maximize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ImageIcon, Maximize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Import placeholder assets
 import accuracyImg from "@assets/generated_images/line_chart_showing_training_accuracy_increasing_over_epochs.png";
@@ -22,6 +28,7 @@ interface GraphCarouselProps {
 
 export function GraphCarousel({ hasData, graphs }: GraphCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [expandedView, setExpandedView] = useState(false);
 
   // Use real graphs if provided, otherwise use placeholders
   const slides = [
@@ -76,7 +83,7 @@ export function GraphCarousel({ hasData, graphs }: GraphCarouselProps) {
            <div className="space-y-2 max-w-sm">
              <h3 className="text-xl font-semibold text-foreground tracking-tight">Awaiting Training Data</h3>
              <p className="text-sm text-muted-foreground/80 leading-relaxed">
-               Configure your experiment on the left and start a training run to visualize real-time metrics here.
+               Configure your experiment on the left. Once trained, metrics will be displayed here.
              </p>
            </div>
         </div>
@@ -92,7 +99,12 @@ export function GraphCarousel({ hasData, graphs }: GraphCarouselProps) {
           <p className="text-sm text-muted-foreground">{slides[currentIndex].desc}</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="icon" className="rounded-full hover:bg-secondary transition-colors">
+           <Button
+             variant="outline"
+             size="icon"
+             className="rounded-full hover:bg-secondary transition-colors"
+             onClick={() => setExpandedView(true)}
+           >
              <Maximize2 size={16} />
            </Button>
            <Button variant="default" size="sm" className="rounded-full gap-2 shadow-sm" onClick={handleDownload}>
@@ -158,6 +170,74 @@ export function GraphCarousel({ hasData, graphs }: GraphCarouselProps) {
           ))}
         </div>
       </div>
+
+      {/* Expanded View Dialog */}
+      <Dialog open={expandedView} onOpenChange={setExpandedView}>
+        <DialogContent className="max-w-5xl w-[90vw] max-h-[85vh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="p-4 border-b shrink-0">
+            <DialogTitle className="text-lg font-semibold">
+              {slides[currentIndex].title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 relative bg-muted/30 overflow-hidden min-h-0">
+            {/* Navigation Buttons */}
+            <button
+              onClick={prevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-background/90 backdrop-blur-sm shadow-md border hover:scale-110 transition-all active:scale-95"
+            >
+              <ChevronLeft size={20} />
+            </button>
+
+            <button
+              onClick={nextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-background/90 backdrop-blur-sm shadow-md border hover:scale-110 transition-all active:scale-95"
+            >
+              <ChevronRight size={20} />
+            </button>
+
+            {/* Image Container */}
+            <div className="w-full h-full flex items-center justify-center p-6 overflow-auto">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={currentIndex}
+                  src={slides[currentIndex].img}
+                  alt={slides[currentIndex].title}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="max-w-full max-h-[60vh] object-contain"
+                />
+              </AnimatePresence>
+            </div>
+
+            {/* Indicators */}
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-20">
+              {slides.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    idx === currentIndex
+                      ? "bg-primary w-6"
+                      : "bg-muted-foreground/30 w-1.5 hover:bg-primary/50"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="p-3 border-t flex justify-end gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={handleDownload}>
+              <Download size={14} className="mr-1.5" />
+              Download
+            </Button>
+            <Button size="sm" onClick={() => setExpandedView(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

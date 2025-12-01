@@ -274,11 +274,14 @@ export function AddDataModal() {
       }
     }}>
       <DialogTrigger asChild>
-        <Button size="lg" className="gap-2 shadow-md hover:shadow-lg transition-all text-base px-6 py-3 h-12">
+        <Button size="lg" className="gap-2 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 text-base px-6 py-3 h-12">
           <Plus className="h-5 w-5" /> Add Data
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[1400px] w-[95vw] max-h-[90vh]">
+      <DialogContent className={cn(
+        "max-h-[90vh]",
+        showBrowser ? "sm:max-w-[1400px] w-[95vw]" : "sm:max-w-[700px] w-[95vw]"
+      )}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             {showBrowser ? (
@@ -348,7 +351,7 @@ export function AddDataModal() {
                   setOpen(false);
                   form.reset();
                 }}
-                className="gap-2"
+                className="gap-2 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
               >
                 Cancel
               </Button>
@@ -364,7 +367,7 @@ export function AddDataModal() {
                 size="sm"
                 onClick={() => setCurrentPath("")}
                 title="Go to home directory"
-                className="h-9 px-2"
+                className="h-9 px-2 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
               >
                 <Home className="h-4 w-4" />
               </Button>
@@ -380,7 +383,7 @@ export function AddDataModal() {
                 }}
                 disabled={!currentPath}
                 title="Go to parent directory"
-                className="h-9 px-2"
+                className="h-9 px-2 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -427,7 +430,7 @@ export function AddDataModal() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="h-7 px-3 text-xs"
+                          className="h-7 px-3 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleSelectFolder(item.path);
@@ -444,11 +447,11 @@ export function AddDataModal() {
             </ScrollArea>
 
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowBrowser(false)}>
+              <Button variant="outline" onClick={() => setShowBrowser(false)} className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">
                 Cancel
               </Button>
               {currentPath && (
-                <Button onClick={() => handleSelectFolder(currentPath)}>
+                <Button onClick={() => handleSelectFolder(currentPath)} className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">
                   <Check className="h-4 w-4 mr-2" />
                   Select Current Folder
                 </Button>
@@ -471,15 +474,16 @@ export function AddDataModal() {
                         <Input
                           placeholder="Click Browse to select a folder..."
                           {...field}
-                          className="font-mono text-sm h-11 bg-muted/30"
+                          className="font-mono text-sm h-11 bg-muted/30 min-w-0"
                           readOnly
+                          title={field.value}
                         />
                       </FormControl>
                       <Button
                         type="button"
                         variant="secondary"
                         onClick={handleBrowseClick}
-                        className="h-11 px-4"
+                        className="h-11 px-4 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 shrink-0"
                       >
                         <FolderOpen className="h-4 w-4 mr-2" />
                         Browse
@@ -518,7 +522,7 @@ export function AddDataModal() {
                           }
                         }}
                         disabled={!form.watch("folderPath") || suggestLabelMutation.isPending}
-                        className="h-11 px-3"
+                        className="h-11 px-3 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
                         title="Generate label from folder name"
                       >
                         {suggestLabelMutation.isPending ? (
@@ -537,13 +541,13 @@ export function AddDataModal() {
               />
 
               <DialogFooter className="gap-2 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={ingestMutation.isPending || !form.watch("folderPath") || !form.watch("label")}
-                  className="min-w-[140px]"
+                  className="min-w-[140px] hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                 >
                   {ingestMutation.isPending ? (
                     <>

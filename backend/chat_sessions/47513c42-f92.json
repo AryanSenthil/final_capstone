@@ -1,0 +1,60 @@
+[
+  {
+    "role": "system",
+    "content": "You are a helpful AI assistant for the Damage Lab sensor data application.\nYou help users manage sensor data, train machine learning models for damage detection, and run inference tests.\n\n## CRITICAL: Ask Clarifying Questions\n\nWhen the user requests an action but is missing required information, ASK THEM before proceeding:\n\n1. **Training a model without architecture specified**: Ask \"Would you like to use CNN (faster, good for most cases) or ResNet (more powerful, slower)?\"\n2. **Training without a model name**: Ask what they'd like to name the model, or suggest one using `suggest_model_name()`\n3. **Ingesting data without a label**: Ask what classification label to use, or suggest one using `suggest_label()`\n4. **Running inference without specifying a model**: Ask which model to use after listing available ones\n\nDO NOT assume defaults - always confirm with the user when key parameters are missing.\n\n## Your Capabilities\n\n### Data Management\n- List and examine datasets in the database\n- Browse the file system to find new sensor data folders\n- Ingest raw sensor data with automatic preprocessing (user can provide a path like \"/home/user/data/folder\")\n- Generate AI metadata for datasets (descriptions, quality scores, training tips)\n- Delete datasets when needed\n\n### Model Training\n- List trained models and their performance metrics\n- Suggest appropriate model names based on data\n- Start training new CNN or ResNet models on selected datasets\n- Monitor training progress in real-time\n- View training reports with graphs and insights\n\n### Inference/Testing\n- Run predictions on new CSV files using trained models\n- View test history and results\n- Analyze per-chunk predictions and confidence scores\n- Organize tests with notes and tags\n\n## Workflow Guidance\n\n### Training a New Model\n1. First use `list_datasets()` to see available data\n2. **ASK the user**: Which architecture - CNN or ResNet?\n3. **ASK the user**: What name for the model? (or suggest one)\n4. Start training with `start_training()`\n5. Monitor with `get_training_status()` or wait with `wait_for_training()`\n\n### Running Inference\n1. Use `list_models()` to see available models\n2. **ASK the user**: Which model to use?\n3. Ensure the CSV file path is correct\n4. Run `run_inference()` with the model ID\n5. Review results and optionally save with tags\n\n### Ingesting New Data (when user provides a path)\nWhen user says something like \"prepare /path/to/folder\" or \"ingest data from /path/to/folder\":\n1. Use `suggest_label()` with the folder path to get a clean label\n2. **ASK the user** to confirm the suggested label\n3. Start ingestion with `ingest_data(folder_path, label)`\n4. Confirm completion and show the new dataset\n\n## Important Notes\n- Architecture options are \"CNN\" (faster, ~15-20 seconds) or \"ResNet\" (more powerful, ~30-60 seconds)\n- Training runs in the background - use status tools to monitor\n- Always verify paths exist before ingesting or running inference\n- Test results can be filtered by model name or tags\n- Reports are auto-generated during training and saved as PDFs\n- When user provides a file/folder path, use it directly for ingestion or inference\n\nBe helpful, concise, and guide users through the appropriate workflows.\nWhen errors occur, explain what went wrong and suggest solutions.\nALWAYS ask clarifying questions when required parameters are missing rather than assuming."
+  },
+  {
+    "role": "user",
+    "content": "Show me all trained models"
+  },
+  {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "call_IKAcms6p7GsvZ82BXSqSQzfu",
+        "type": "function",
+        "function": {
+          "name": "list_models",
+          "arguments": "{}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "call_IKAcms6p7GsvZ82BXSqSQzfu",
+    "content": "{\n  \"status\": \"success\",\n  \"models\": [\n    {\n      \"id\": \"disbond_half_and_full\",\n      \"name\": \"disbond_half_and_full\",\n      \"accuracy\": \"0.0%\",\n      \"loss\": \"0.0000\",\n      \"architecture\": \"Unknown\",\n      \"date\": \"2025-12-01 05:11:44\",\n      \"training_time\": 0.0,\n      \"has_report\": false\n    },\n    {\n      \"id\": \"cnn_quarter_crush_disbond\",\n      \"name\": \"cnn_quarter_crush_disbond\",\n      \"accuracy\": \"91.7%\",\n      \"loss\": \"0.1335\",\n      \"architecture\": \"CNN\",\n      \"date\": \"2025-12-01 05:08:29\",\n      \"training_time\": 21.799551248550415,\n      \"has_report\": true\n    },\n    {\n      \"id\": \"cnn_quarter_half_disbond\",\n      \"name\": \"cnn_quarter_half_disbond\",\n      \"accuracy\": \"81.2%\",\n      \"loss\": \"0.3044\",\n      \"architecture\": \"CNN\",\n      \"date\": \"2025-12-01 03:42:31\",\n      \"training_time\": 17.98638343811035,\n      \"has_report\": true\n    },\n    {\n      \"id\": \"cnn_half_full_disbond_2\",\n      \"name\": \"cnn_half_full_disbond_2\",\n      \"accuracy\": \"85.7%\",\n      \"loss\": \"0.2918\",\n      \"architecture\": \"CNN\",\n      \"date\": \"2025-12-01 03:31:08\",\n      \"training_time\": 14.478971481323242,\n      \"has_report\": true\n    },\n    {\n      \"id\": \"cnn_half_full_disbond\",\n      \"name\": \"cnn_half_full_disbond\",\n      \"accuracy\": \"85.7%\",\n      \"loss\": \"0.8133\",\n      \"architecture\": \"CNN\",\n      \"date\": \"2025-11-29 02:31:17\",\n      \"training_time\": 0.0,\n      \"has_report\": true\n    }\n  ],\n  \"count\": 5\n}"
+  },
+  {
+    "role": "assistant",
+    "content": "Here are all trained models currently in the system:\n\n1. ID: disbond_half_and_full  \n   - Name: disbond_half_and_full  \n   - Architecture: Unknown  \n   - Accuracy: 0.0%  \n   - Loss: 0.0000  \n   - Trained on: 2025-12-01 05:11:44  \n   - Training time: 0.0 s  \n   - Report: No  \n\n2. ID: cnn_quarter_crush_disbond  \n   - Name: cnn_quarter_crush_disbond  \n   - Architecture: CNN  \n   - Accuracy: 91.7%  \n   - Loss: 0.1335  \n   - Trained on: 2025-12-01 05:08:29  \n   - Training time: 21.8 s  \n   - Report: Yes  \n\n3. ID: cnn_quarter_half_disbond  \n   - Name: cnn_quarter_half_disbond  \n   - Architecture: CNN  \n   - Accuracy: 81.2%  \n   - Loss: 0.3044  \n   - Trained on: 2025-12-01 03:42:31  \n   - Training time: 18.0 s  \n   - Report: Yes  \n\n4. ID: cnn_half_full_disbond_2  \n   - Name: cnn_half_full_disbond_2  \n   - Architecture: CNN  \n   - Accuracy: 85.7%  \n   - Loss: 0.2918  \n   - Trained on: 2025-12-01 03:31:08  \n   - Training time: 14.5 s  \n   - Report: Yes  \n\n5. ID: cnn_half_full_disbond  \n   - Name: cnn_half_full_disbond  \n   - Architecture: CNN  \n   - Accuracy: 85.7%  \n   - Loss: 0.8133  \n   - Trained on: 2025-11-29 02:31:17  \n   - Training time: 0.0 s  \n   - Report: Yes  \n\nIf you tell me which model ID you\u2019re interested in, I can:\n- Show detailed training info, or  \n- Use it to run inference on a CSV file you have."
+  },
+  {
+    "role": "user",
+    "content": "Check the system status"
+  },
+  {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "call_Bqsr9PQCwBM1sVQCdfAVju5x",
+        "type": "function",
+        "function": {
+          "name": "get_system_status",
+          "arguments": "{}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "call_Bqsr9PQCwBM1sVQCdfAVju5x",
+    "content": "{\n  \"status\": \"success\",\n  \"system_status\": \"ok\",\n  \"message\": \"Damage Lab system is running\",\n  \"directories\": {\n    \"database\": true,\n    \"raw_database\": true,\n    \"models\": true\n  }\n}"
+  },
+  {
+    "role": "assistant",
+    "content": "Current Damage Lab system status:\n\n- Overall status: ok  \n- Message: Damage Lab system is running  \n\nKey directories:\n- Processed database: available \u2705  \n- Raw database: available \u2705  \n- Models directory: available \u2705  \n\nYou\u2019re good to ingest data, train models, and run inference.  \nWhat would you like to do next\u2014ingest new data, train a model, or run tests on a CSV?"
+  }
+]

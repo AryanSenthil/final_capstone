@@ -1,0 +1,72 @@
+[
+  {
+    "test_id": "20251201_024722",
+    "timestamp": "2025-12-01T02:47:22.985224",
+    "csv_filename": "disbond_0.5_0003.csv",
+    "model_name": "cnn_half_full_disbond",
+    "num_chunks": 1,
+    "majority_class": "0.5_disbond",
+    "majority_confidence": 1.0,
+    "tags": []
+  },
+  {
+    "test_id": "20251201_024842",
+    "timestamp": "2025-12-01T02:48:42.466632",
+    "csv_filename": "disbond_1.0_0003.csv",
+    "model_name": "cnn_half_full_disbond",
+    "num_chunks": 1,
+    "majority_class": "1.0_disbond",
+    "majority_confidence": 1.0,
+    "tags": []
+  },
+  {
+    "test_id": "20251201_025426",
+    "timestamp": "2025-12-01T02:54:26.530498",
+    "csv_filename": "disbond_0.5_0003.csv",
+    "model_name": "cnn_half_full_disbond",
+    "num_chunks": 1,
+    "majority_class": "0.5_disbond",
+    "majority_confidence": 1.0,
+    "tags": []
+  },
+  {
+    "test_id": "20251201_031357",
+    "timestamp": "2025-12-01T03:13:57.350331",
+    "csv_filename": "cycle_002.csv",
+    "model_name": "cnn_half_full_disbond",
+    "num_chunks": 3,
+    "majority_class": "0.5_disbond",
+    "majority_confidence": 1.0,
+    "tags": []
+  },
+  {
+    "test_id": "20251201_031948",
+    "timestamp": "2025-12-01T03:19:48.900766",
+    "csv_filename": "cycle_003.csv",
+    "model_name": "cnn_half_full_disbond",
+    "num_chunks": 3,
+    "majority_class": "0.5_disbond",
+    "majority_confidence": 0.6666666666666666,
+    "tags": []
+  },
+  {
+    "test_id": "20251201_033230",
+    "timestamp": "2025-12-01T03:32:30.917552",
+    "csv_filename": "disbond_1.0_0006.csv",
+    "model_name": "cnn_half_full_disbond_2",
+    "num_chunks": 1,
+    "majority_class": "0.5_disbond",
+    "majority_confidence": 1.0,
+    "tags": []
+  },
+  {
+    "test_id": "20251201_034406",
+    "timestamp": "2025-12-01T03:44:06.190556",
+    "csv_filename": "disbond_0.25_0010.csv",
+    "model_name": "cnn_quarter_half_disbond",
+    "num_chunks": 1,
+    "majority_class": "0.25_disbond",
+    "majority_confidence": 1.0,
+    "tags": []
+  }
+]

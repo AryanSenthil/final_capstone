@@ -15,6 +15,23 @@ backend/raw_database/*
 backend/models/*
 !backend/models/.gitkeep
 
+# Test database contents (keep structure, ignore data)
+backend/test_database/*
+!backend/test_database/.gitkeep
+!backend/test_database/raw_csvs/
+!backend/test_database/processed_chunks/
+!backend/test_database/metadata/
+backend/test_database/raw_csvs/*
+!backend/test_database/raw_csvs/.gitkeep
+backend/test_database/processed_chunks/*
+!backend/test_database/processed_chunks/.gitkeep
+backend/test_database/metadata/*
+!backend/test_database/metadata/.gitkeep
+
+# Test uploads (keep structure, ignore data)
+backend/test_uploads/*
+!backend/test_uploads/.gitkeep
+
 # Environment files (secrets)
 .env
 .env.*

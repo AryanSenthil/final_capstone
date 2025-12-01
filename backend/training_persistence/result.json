@@ -1,0 +1,11 @@
+{
+  "result": {
+    "accuracy": "81.2%",
+    "loss": "0.3044",
+    "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_quarter_half_disbond",
+    "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_quarter_half_disbond/cnn_quarter_half_disbond_report.pdf"
+  },
+  "status": "complete",
+  "job_id": "3f80d288",
+  "last_updated": "2025-12-01T03:42:31.036968"
+}

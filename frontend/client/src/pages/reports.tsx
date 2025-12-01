@@ -2,10 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Search, Filter, Download, MoreVertical, ChevronDown, Loader2, ScrollText } from "lucide-react";
+import { FileText, Search, Download, MoreVertical, Loader2, ScrollText, ArrowUpDown } from "lucide-react";
 import { ReportModal } from "@/components/training/ReportModal";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Report {
   id: string;
@@ -14,6 +21,18 @@ interface Report {
   date: string;
   model_name: string;
   path: string;
+  training_time?: number;  // Training duration in seconds
+}
+
+function formatTrainingTime(seconds?: number): string {
+  if (!seconds) return "-";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
 }
 
 export default function ReportsPage() {
@@ -21,15 +40,51 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [sortBy, setSortBy] = useState<string>("date-desc");
+  const [modelFilter, setModelFilter] = useState<string>("all");
 
   const { data: reports = [], isLoading } = useQuery<Report[]>({
     queryKey: ["/api/reports"],
   });
 
-  const filteredReports = reports.filter(report =>
-    report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    report.model_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Get unique model names for filter dropdown
+  const modelNames = useMemo(() => {
+    const models = new Set<string>();
+    reports.forEach(r => models.add(r.model_name));
+    return Array.from(models).sort();
+  }, [reports]);
+
+  // Filter and sort reports
+  const filteredReports = useMemo(() => {
+    let result = reports.filter(report =>
+      report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      report.model_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Apply model filter
+    if (modelFilter !== "all") {
+      result = result.filter(r => r.model_name === modelFilter);
+    }
+
+    // Sort reports
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "date-asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "model-asc":
+          return a.model_name.localeCompare(b.model_name);
+        case "date-desc":
+        default:
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+    });
+
+    return result;
+  }, [reports, searchQuery, modelFilter, sortBy]);
 
   const handleViewReport = (report: Report) => {
     setSelectedReport(report);
@@ -45,7 +100,9 @@ export default function ReportsPage() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = report.name;
+        // Use actual filename from path for consistency
+        const filename = report.path.split('/').pop() || report.name;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -70,14 +127,23 @@ export default function ReportsPage() {
         // Get filename from Content-Disposition header or use default
         const contentDisposition = response.headers.get('Content-Disposition');
         const filenameMatch = contentDisposition?.match(/filename=(.+)/);
-        a.download = filenameMatch ? filenameMatch[1] : 'all_reports.zip';
+        const filename = filenameMatch ? filenameMatch[1] : 'all_reports.zip';
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         a.remove();
+
+        // Show success message
+        console.log(`Successfully downloaded: ${filename}`);
+      } else {
+        const errorText = await response.text();
+        console.error('Export failed:', response.status, errorText);
+        alert(`Failed to export reports: ${response.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('Failed to export all reports:', error);
+      alert(`Failed to export reports: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);
     }
@@ -99,7 +165,7 @@ export default function ReportsPage() {
           <p className="text-muted-foreground text-base">Centralized archive of all experiment documentation.</p>
         </div>
         <Button
-          className="gap-2 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all"
+          className="gap-2 rounded-xl shadow-lg shadow-primary/20 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
           onClick={handleExportAll}
           disabled={isExporting || reports.length === 0}
         >
@@ -126,11 +192,31 @@ export default function ReportsPage() {
            />
          </div>
          <div className="h-6 w-px bg-border mx-2" />
-         <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground rounded-xl">
-           <Filter size={16} />
-           Filter
-           <ChevronDown size={12} className="opacity-50" />
-         </Button>
+         <Select value={modelFilter} onValueChange={setModelFilter}>
+           <SelectTrigger className="w-[160px] h-10 rounded-xl border-none bg-transparent hover:bg-muted/50 transition-colors">
+             <SelectValue placeholder="All Models" />
+           </SelectTrigger>
+           <SelectContent>
+             <SelectItem value="all">All Models</SelectItem>
+             {modelNames.map(model => (
+               <SelectItem key={model} value={model}>{model}</SelectItem>
+             ))}
+           </SelectContent>
+         </Select>
+         <div className="h-6 w-px bg-border" />
+         <Select value={sortBy} onValueChange={setSortBy}>
+           <SelectTrigger className="w-[160px] h-10 rounded-xl border-none bg-transparent hover:bg-muted/50 transition-colors">
+             <ArrowUpDown size={14} className="mr-2 text-muted-foreground" />
+             <SelectValue placeholder="Sort by" />
+           </SelectTrigger>
+           <SelectContent>
+             <SelectItem value="date-desc">Newest First</SelectItem>
+             <SelectItem value="date-asc">Oldest First</SelectItem>
+             <SelectItem value="name-asc">Name A-Z</SelectItem>
+             <SelectItem value="name-desc">Name Z-A</SelectItem>
+             <SelectItem value="model-asc">Model A-Z</SelectItem>
+           </SelectContent>
+         </Select>
       </div>
 
       {filteredReports.length === 0 ? (
@@ -139,7 +225,7 @@ export default function ReportsPage() {
           <h3 className="text-lg font-semibold mb-2">No Reports Yet</h3>
           <p className="text-sm">Train a model with report generation enabled to see reports here.</p>
           <Link href="/training">
-            <Button className="mt-4">Go to Training</Button>
+            <Button className="mt-4 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">Go to Training</Button>
           </Link>
         </div>
       ) : (
@@ -147,9 +233,10 @@ export default function ReportsPage() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow className="hover:bg-transparent border-b border-border/60">
-                <TableHead className="w-[450px] py-4 pl-6 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Filename</TableHead>
+                <TableHead className="w-[400px] py-4 pl-6 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Filename</TableHead>
                 <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Model</TableHead>
                 <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Generated</TableHead>
+                <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Training Time</TableHead>
                 <TableHead className="py-4 text-xs uppercase tracking-wider font-semibold text-muted-foreground">Size</TableHead>
                 <TableHead className="py-4 pr-6 text-right text-xs uppercase tracking-wider font-semibold text-muted-foreground">Actions</TableHead>
               </TableRow>
@@ -173,6 +260,7 @@ export default function ReportsPage() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground font-medium">{report.model_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground font-medium">{report.date}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{formatTrainingTime(report.training_time)}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded w-fit">{report.size}</TableCell>
                   <TableCell className="text-right pr-6">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -187,7 +275,7 @@ export default function ReportsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 hover:bg-muted"
+                        className="h-8 w-8 hover:bg-muted hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
                         onClick={(e) => { e.stopPropagation(); }}
                       >
                         <MoreVertical size={16} />

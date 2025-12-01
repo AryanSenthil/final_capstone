@@ -12,14 +12,16 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from settings.constants import DATABASE_DIR, RAW_DATABASE_DIR, MODELS_DIR, REPORTS_DIR, METADATA_FILENAME, OPENAI_MODEL
+from settings.constants import BACKEND_DIR, DATABASE_DIR, RAW_DATABASE_DIR, MODELS_DIR, REPORTS_DIR, METADATA_FILENAME, OPENAI_MODEL
+from settings_api import router as settings_router
+from chat_api import router as chat_router
 
 # Load environment variables
 load_dotenv()
@@ -41,6 +43,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(settings_router)
+app.include_router(chat_router)
 
 
 # ============ Pydantic Models ============
@@ -254,12 +260,23 @@ Respond in JSON format:
 
         result = json.loads(response.choices[0].message.content)
 
+        # Normalize suggested architecture to only valid values
+        suggested_arch = result.get("suggested_architecture", "CNN")
+        if suggested_arch and isinstance(suggested_arch, str):
+            suggested_arch_upper = suggested_arch.strip().upper()
+            if "RESNET" in suggested_arch_upper:
+                suggested_arch = "ResNet"
+            else:
+                suggested_arch = "CNN"
+        else:
+            suggested_arch = "CNN"
+
         # Save AI metadata back to the metadata.json file
         metadata["ai_metadata"] = {
             "description": result.get("description", ""),
             "category": result.get("category", ""),
             "quality_score": result.get("quality_score", 0.5),
-            "suggested_architecture": result.get("suggested_architecture", "CNN"),
+            "suggested_architecture": suggested_arch,
             "training_tips": result.get("training_tips", []),
             "generated_at": datetime.now().isoformat()
         }
@@ -528,12 +545,23 @@ Respond in JSON format:
 
         result = json.loads(response.choices[0].message.content)
 
+        # Normalize suggested architecture to only valid values
+        suggested_arch = result.get("suggested_architecture", "CNN")
+        if suggested_arch and isinstance(suggested_arch, str):
+            suggested_arch_upper = suggested_arch.strip().upper()
+            if "RESNET" in suggested_arch_upper:
+                suggested_arch = "ResNet"
+            else:
+                suggested_arch = "CNN"
+        else:
+            suggested_arch = "CNN"
+
         # Save AI metadata back to the metadata.json file
         metadata["ai_metadata"] = {
             "description": result.get("description", ""),
             "category": result.get("category", ""),
             "quality_score": result.get("quality_score", 0.5),
-            "suggested_architecture": result.get("suggested_architecture", "CNN"),
+            "suggested_architecture": suggested_arch,
             "training_tips": result.get("training_tips", []),
             "generated_at": datetime.now().isoformat()
         }
@@ -1201,6 +1229,8 @@ class ModelInfo(BaseModel):
     architecture: str
     status: str
     path: str
+    test_accuracy: Optional[str] = None
+    training_time: Optional[float] = None  # Training duration in seconds
     report_path: Optional[str] = None
 
 
@@ -1211,6 +1241,7 @@ class ReportInfo(BaseModel):
     date: str
     model_name: str
     path: str
+    training_time: Optional[float] = None  # Training duration in seconds
 
 
 # Training job tracking with file-based persistence
@@ -1454,6 +1485,7 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
             "labels": labels,
             "created_at": datetime.now().isoformat(),
             "report_path": result.report_path,
+            "training_time": result.training_result.training_time,
         }
 
         model_dir = Path(save_dir)
@@ -1601,15 +1633,20 @@ async def get_models():
                 # Auto-generate model info if missing
                 info = _generate_model_info(model_dir)
 
+            test_acc = info.get('test_accuracy', info.get('accuracy', 0))
+            training_time = info.get('training_time', 0.0)
+
             models.append(ModelInfo(
                 id=model_dir.name,
                 name=info.get("name", model_dir.name),
                 accuracy=f"{info.get('accuracy', 0) * 100:.1f}%",
                 loss=f"{info.get('loss', 0):.4f}",
-                date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d"),
+                date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d %H:%M:%S"),
                 architecture=info.get("architecture", "Unknown"),
                 status="Active",
                 path=str(model_dir),
+                test_accuracy=f"{test_acc * 100:.1f}%",
+                training_time=training_time,
                 report_path=info.get("report_path"),
             ))
 
@@ -1634,15 +1671,20 @@ async def get_model(model_id: str):
         # Auto-generate model info if missing
         info = _generate_model_info(model_dir)
 
+    test_acc = info.get('test_accuracy', info.get('accuracy', 0))
+    training_time = info.get('training_time', 0.0)
+
     return ModelInfo(
         id=model_dir.name,
         name=info.get("name", model_dir.name),
         accuracy=f"{info.get('accuracy', 0) * 100:.1f}%",
         loss=f"{info.get('loss', 0):.4f}",
-        date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d"),
+        date=datetime.fromisoformat(info.get("created_at", datetime.now().isoformat())).strftime("%Y-%m-%d %H:%M:%S"),
         architecture=info.get("architecture", "Unknown"),
         status="Active",
         path=str(model_dir),
+        test_accuracy=f"{test_acc * 100:.1f}%",
+        training_time=training_time,
         report_path=info.get("report_path"),
     )
 
@@ -1688,19 +1730,98 @@ async def get_model_graphs(model_id: str):
     return graphs
 
 
-@app.delete("/api/models/{model_id}")
-async def delete_model(model_id: str):
-    """Delete a model."""
-    import shutil
+@app.get("/api/models/{model_id}/history")
+async def get_model_history(model_id: str):
+    """Get training history for interactive charts."""
+    model_dir = MODELS_DIR / model_id
+    history_path = model_dir / "training_history.json"
+
+    if not model_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+
+    if not history_path.exists():
+        return {"history": None}
+
+    with open(history_path) as f:
+        history = json.load(f)
+
+    return {"history": history}
+
+
+@app.get("/api/models/{model_id}/dependencies")
+async def get_model_dependencies_endpoint(model_id: str):
+    """
+    Preview what will be affected when deleting a model.
+
+    Returns counts of:
+    - training_jobs: Number of training job entries that reference this model
+    - tests: Number of inference tests that used this model
+    - is_current_training_state: Whether this model is the current training state
+    """
+    from utils.delete_model import get_model_dependencies
 
     model_dir = MODELS_DIR / model_id
 
     if not model_dir.exists():
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
 
-    shutil.rmtree(model_dir)
+    dependencies = get_model_dependencies(model_id)
 
-    return {"success": True, "message": f"Model '{model_id}' deleted"}
+    return {
+        "model_id": model_id,
+        "dependencies": dependencies
+    }
+
+
+@app.delete("/api/models/{model_id}")
+async def delete_model(model_id: str):
+    """
+    Delete a model and clean up all related metadata.
+
+    This includes:
+    - Model directory and all files
+    - Training job entries in training_jobs.json
+    - Training state persistence if it references this model
+    - Tests are updated to mark the model as deleted (but preserved)
+    """
+    from utils.delete_model import delete_model_complete, get_model_dependencies
+
+    model_dir = MODELS_DIR / model_id
+
+    if not model_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+
+    # Perform comprehensive deletion
+    results = delete_model_complete(model_id)
+
+    # Build response message
+    messages = [f"Model '{model_id}' deleted"]
+
+    if results["reports_archived"] > 0:
+        messages.append(f"{results['reports_archived']} report(s) archived")
+
+    if results["training_jobs_cleaned"] > 0:
+        messages.append(f"{results['training_jobs_cleaned']} training job(s) removed from history")
+
+    if results["training_state_cleared"]:
+        messages.append("Training UI state cleared")
+
+    if results["tests_updated"] > 0:
+        messages.append(f"{results['tests_updated']} test(s) updated")
+
+    if results["errors"]:
+        return {
+            "success": True,
+            "message": ". ".join(messages),
+            "warnings": results["errors"],
+            "details": results
+        }
+
+    return {
+        "success": True,
+        "message": ". ".join(messages),
+        "details": results
+    }
 
 
 @app.get("/api/reports", response_model=list[ReportInfo])
@@ -1712,6 +1833,17 @@ async def get_reports():
     if MODELS_DIR.exists():
         for model_dir in MODELS_DIR.iterdir():
             if model_dir.is_dir():
+                # Try to load model info for training_time
+                training_time = None
+                model_info_path = model_dir / "model_info.json"
+                if model_info_path.exists():
+                    try:
+                        with open(model_info_path) as f:
+                            model_info = json.load(f)
+                            training_time = model_info.get("training_time")
+                    except Exception:
+                        pass
+
                 # Look for PDF reports
                 for pdf_file in model_dir.glob("*.pdf"):
                     stat = pdf_file.stat()
@@ -1719,10 +1851,37 @@ async def get_reports():
                         id=pdf_file.stem,
                         name=pdf_file.name,
                         size=format_file_size(stat.st_size),
-                        date=datetime.fromtimestamp(stat.st_mtime).strftime("%b %d, %Y"),
+                        date=datetime.fromtimestamp(stat.st_mtime).strftime("%b %d, %Y %H:%M"),
                         model_name=model_dir.name,
                         path=str(pdf_file),
+                        training_time=training_time,
                     ))
+
+    # Also include archived reports from deleted models
+    reports_archive = BACKEND_DIR / "reports_archive"
+    if reports_archive.exists():
+        for pdf_file in reports_archive.glob("*.pdf"):
+            # Try to load archived report metadata
+            metadata_path = pdf_file.with_suffix(".json")
+            model_name = "[Archived]"
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path) as f:
+                        meta = json.load(f)
+                        model_name = f"{meta.get('original_model', 'Unknown')} [Archived]"
+                except Exception:
+                    pass
+
+            stat = pdf_file.stat()
+            reports.append(ReportInfo(
+                id=pdf_file.stem,
+                name=pdf_file.name,
+                size=format_file_size(stat.st_size),
+                date=datetime.fromtimestamp(stat.st_mtime).strftime("%b %d, %Y %H:%M"),
+                model_name=model_name,
+                path=str(pdf_file),
+                training_time=None,
+            ))
 
     # Sort by date (newest first)
     reports.sort(key=lambda r: r.date, reverse=True)
@@ -1788,6 +1947,419 @@ async def export_all_reports():
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+# ============ Testing/Inference API ============
+
+# Testing database and inference module imports (lazy loaded)
+_test_database = None
+
+
+def get_test_database():
+    """Get or create the test database instance."""
+    global _test_database
+    if _test_database is None:
+        from testing import TestDatabase, TestDatabaseConfig
+        config = TestDatabaseConfig(db_root=Path(__file__).parent / "test_database")
+        _test_database = TestDatabase(config)
+    return _test_database
+
+
+class TestSummary(BaseModel):
+    test_id: str
+    timestamp: str
+    csv_filename: str
+    model_name: str
+    num_chunks: int
+    majority_class: str
+    majority_confidence: float
+    tags: list[str] = []
+
+
+class TestDetail(BaseModel):
+    test_id: str
+    timestamp: str
+    original_csv_path: str
+    stored_csv_path: str
+    model_path: str
+    model_name: Optional[str] = None
+    model_version: Optional[str] = None
+    processing_metadata: Optional[dict] = None
+    num_chunks: int = 0
+    predictions: Optional[list[str]] = None
+    probabilities: Optional[list[list[float]]] = None
+    class_ids: Optional[list[int]] = None
+    majority_class: Optional[str] = None
+    majority_count: Optional[int] = None
+    majority_percentage: Optional[float] = None
+    processed_chunks_dir: Optional[str] = None
+    auto_detect_csv: bool = True
+    csv_structure: Optional[dict] = None
+    notes: Optional[str] = None
+    tags: list[str] = []
+
+
+class TestStatsResponse(BaseModel):
+    total_tests: int
+    total_size_mb: float
+    unique_models: int
+    unique_tags: int
+    models: list[str]
+    tags: list[str]
+
+
+class InferenceRequest(BaseModel):
+    csv_path: str
+    model_id: str
+    notes: Optional[str] = None
+    tags: Optional[list[str]] = None
+    log_to_database: bool = True
+
+
+class InferenceResponse(BaseModel):
+    success: bool
+    test_id: Optional[str] = None
+    predictions: list[str] = []
+    probabilities: list[list[float]] = []
+    majority_class: Optional[str] = None
+    majority_confidence: Optional[float] = None
+    num_chunks: int = 0
+    error: Optional[str] = None
+
+
+@app.get("/api/tests", response_model=list[TestSummary])
+async def list_tests(
+    limit: Optional[int] = None,
+    model_name: Optional[str] = None,
+    tags: Optional[str] = None
+):
+    """Get list of all tests with optional filtering."""
+    db = get_test_database()
+
+    # Parse tags from comma-separated string
+    tag_list = tags.split(",") if tags else None
+
+    tests = db.list_tests(limit=limit, model_name=model_name, tags=tag_list)
+
+    result = []
+    for t in tests:
+        # Load full test metadata to get probabilities
+        avg_confidence = 0.0
+        try:
+            full_test = db.get_test(t["test_id"])
+            probabilities = full_test.probabilities or []
+            if probabilities and len(probabilities) > 0:
+                # Get the max probability for each chunk and average them
+                max_probs = [max(probs) if probs else 0 for probs in probabilities]
+                avg_confidence = sum(max_probs) / len(max_probs) * 100  # Convert to percentage
+        except Exception:
+            # Fall back to majority_confidence if loading fails
+            avg_confidence = t.get("majority_confidence", 0.0) * 100
+
+        result.append(TestSummary(
+            test_id=t["test_id"],
+            timestamp=t["timestamp"],
+            csv_filename=t.get("csv_filename", ""),
+            model_name=t.get("model_name", ""),
+            num_chunks=t.get("num_chunks", 0),
+            majority_class=t.get("majority_class", ""),
+            majority_confidence=avg_confidence,
+            tags=t.get("tags", [])
+        ))
+
+    return result
+
+
+@app.get("/api/tests/stats", response_model=TestStatsResponse)
+async def get_test_stats():
+    """Get test database statistics."""
+    db = get_test_database()
+    stats = db.get_stats()
+
+    return TestStatsResponse(
+        total_tests=stats["total_tests"],
+        total_size_mb=stats["total_size_mb"],
+        unique_models=stats["unique_models"],
+        unique_tags=stats["unique_tags"],
+        models=stats["models"],
+        tags=stats["tags"]
+    )
+
+
+@app.get("/api/tests/{test_id}", response_model=TestDetail)
+async def get_test_detail(test_id: str):
+    """Get detailed information about a specific test."""
+    db = get_test_database()
+
+    try:
+        metadata = db.get_test(test_id)
+        return TestDetail(
+            test_id=metadata.test_id,
+            timestamp=metadata.timestamp,
+            original_csv_path=metadata.original_csv_path,
+            stored_csv_path=metadata.stored_csv_path,
+            model_path=metadata.model_path,
+            model_name=metadata.model_name,
+            model_version=metadata.model_version,
+            processing_metadata=metadata.processing_metadata,
+            num_chunks=metadata.num_chunks,
+            predictions=metadata.predictions,
+            probabilities=metadata.probabilities,
+            class_ids=metadata.class_ids,
+            majority_class=metadata.majority_class,
+            majority_count=metadata.majority_count,
+            majority_percentage=metadata.majority_percentage,
+            processed_chunks_dir=metadata.processed_chunks_dir,
+            auto_detect_csv=metadata.auto_detect_csv,
+            csv_structure=metadata.csv_structure,
+            notes=metadata.notes,
+            tags=metadata.tags or []
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/tests/{test_id}/csv")
+async def download_test_csv(test_id: str):
+    """Download the raw CSV file for a test."""
+    db = get_test_database()
+
+    try:
+        csv_path = db.get_csv_path(test_id)
+        if not csv_path.exists():
+            raise HTTPException(status_code=404, detail="CSV file not found")
+
+        return FileResponse(
+            path=csv_path,
+            media_type="text/csv",
+            filename=csv_path.name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/tests/{test_id}/chunk/{chunk_idx}")
+async def get_test_chunk(test_id: str, chunk_idx: int):
+    """Get processed chunk data for a test."""
+    db = get_test_database()
+
+    try:
+        chunk_data = db.load_chunk(test_id, chunk_idx)
+        return {
+            "test_id": test_id,
+            "chunk_idx": chunk_idx,
+            "data": chunk_data.tolist(),
+            "shape": list(chunk_data.shape)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/tests/{test_id}/raw-data")
+async def get_test_raw_data(test_id: str, max_points: int = 1000):
+    """Get raw CSV data for visualization."""
+    db = get_test_database()
+
+    try:
+        metadata = db.get_test(test_id)
+        csv_path = db.get_csv_path(test_id)
+
+        if not csv_path.exists():
+            raise HTTPException(status_code=404, detail="CSV file not found")
+
+        # Try reading with different skip_rows values to handle label headers
+        df = None
+        skip_rows = 0
+        for skip in [0, 1, 2]:
+            try:
+                temp_df = pd.read_csv(csv_path, skiprows=skip)
+                # Check if we have at least 2 columns and numeric data
+                if len(temp_df.columns) >= 2:
+                    # Check if any column is numeric
+                    has_numeric = any(pd.api.types.is_numeric_dtype(temp_df[col]) for col in temp_df.columns)
+                    if has_numeric:
+                        df = temp_df
+                        skip_rows = skip
+                        break
+            except Exception:
+                continue
+
+        if df is None:
+            raise HTTPException(status_code=400, detail="Could not parse CSV file")
+
+        # Try to detect time and value columns
+        time_col = None
+        value_col = None
+
+        # Common time column names
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if any(t in col_lower for t in ['time', 'timestamp', 'seconds']):
+                time_col = col
+                break
+
+        # If no time column found by name, use first numeric column as time
+        if time_col is None:
+            for col in df.columns:
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    time_col = col
+                    break
+
+        # If still no time column, use index
+        if time_col is None:
+            df['_time'] = range(len(df))
+            time_col = '_time'
+
+        # Use first numeric column that isn't time as value
+        for col in df.columns:
+            if col != time_col and pd.api.types.is_numeric_dtype(df[col]):
+                value_col = col
+                break
+
+        if value_col is None:
+            raise HTTPException(status_code=400, detail="No numeric value column found")
+
+        # Downsample if needed
+        step = max(1, len(df) // max_points)
+        df_sampled = df.iloc[::step]
+
+        return {
+            "test_id": test_id,
+            "time": df_sampled[time_col].tolist(),
+            "values": df_sampled[value_col].tolist(),
+            "time_column": time_col if time_col != '_time' else 'index',
+            "value_column": value_col,
+            "total_points": len(df),
+            "sampled_points": len(df_sampled)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/api/tests/{test_id}")
+async def delete_test(test_id: str):
+    """Delete a test and all its associated data."""
+    db = get_test_database()
+
+    try:
+        db.delete_test(test_id)
+        return {"success": True, "message": f"Test {test_id} deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/tests/inference", response_model=InferenceResponse)
+async def run_inference(request: InferenceRequest):
+    """Run inference on a CSV file using a trained model."""
+    from testing import predict_from_csv
+
+    csv_path = Path(request.csv_path)
+
+    # Find the serving model - it's named {model_id}_serving
+    model_dir = MODELS_DIR / request.model_id
+    serving_model_path = model_dir / f"{request.model_id}_serving"
+
+    # Fallback to check other common naming patterns
+    if not serving_model_path.exists():
+        # Try looking for any directory ending with _serving
+        for item in model_dir.iterdir() if model_dir.exists() else []:
+            if item.is_dir() and item.name.endswith("_serving"):
+                serving_model_path = item
+                break
+
+    if not csv_path.exists():
+        raise HTTPException(status_code=400, detail=f"CSV file not found: {request.csv_path}")
+
+    if not serving_model_path.exists():
+        raise HTTPException(status_code=400, detail=f"Serving model not found for: {request.model_id}. Expected at {serving_model_path}")
+
+    try:
+        # Get model info
+        model_info_path = MODELS_DIR / request.model_id / "model_info.json"
+        model_name = request.model_id
+        if model_info_path.exists():
+            with open(model_info_path) as f:
+                info = json.load(f)
+                model_name = info.get("name", request.model_id)
+
+        result = predict_from_csv(
+            csv_path=str(csv_path),
+            model_path=str(serving_model_path),
+            auto_detect=True,
+            verbose=False,
+            log_to_database=request.log_to_database,
+            model_name=model_name,
+            notes=request.notes,
+            tags=request.tags
+        )
+
+        majority_class, _, majority_confidence = result.get_majority_prediction()
+
+        # Get test_id from database if logged
+        test_id = None
+        if request.log_to_database:
+            db = get_test_database()
+            tests = db.list_tests(limit=1)
+            if tests:
+                test_id = tests[0]["test_id"]
+
+        return InferenceResponse(
+            success=True,
+            test_id=test_id,
+            predictions=result.class_names,
+            probabilities=result.probabilities.tolist(),
+            majority_class=majority_class,
+            majority_confidence=majority_confidence,
+            num_chunks=len(result.class_names)
+        )
+
+    except Exception as e:
+        return InferenceResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+class FileUploadResponse(BaseModel):
+    success: bool
+    file_path: Optional[str] = None
+    filename: Optional[str] = None
+    size_kb: Optional[float] = None
+    error: Optional[str] = None
+
+
+@app.post("/api/tests/upload", response_model=FileUploadResponse)
+async def upload_test_file(file: UploadFile = File(...)):
+    """Upload a CSV file for testing."""
+    # Validate file type
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+
+    # Create uploads directory
+    uploads_dir = Path(__file__).parent / "test_uploads"
+    uploads_dir.mkdir(exist_ok=True)
+
+    # Save file with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"{timestamp}_{file.filename}"
+    file_path = uploads_dir / safe_filename
+
+    try:
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        return FileUploadResponse(
+            success=True,
+            file_path=str(file_path),
+            filename=file.filename,
+            size_kb=len(content) / 1024
+        )
+    except Exception as e:
+        return FileUploadResponse(
+            success=False,
+            error=str(e)
+        )
 
 
 if __name__ == "__main__":

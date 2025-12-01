@@ -20,155 +20,6 @@
     },
     "created_at": "2025-11-28T22:04:26.813361"
   },
-  "8741d990": {
-    "job_id": "8741d990",
-    "model_name": "cnn_halfcore_classifier",
-    "labels": [
-      "0.5_disbond",
-      "0.5_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "complete",
-    "current_step": 4,
-    "current_epoch": null,
-    "total_epochs": 50,
-    "progress_message": "Training complete!",
-    "error_message": null,
-    "result": {
-      "accuracy": "100.0%",
-      "loss": "0.1536",
-      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_halfcore_classifier",
-      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_halfcore_classifier/cnn_halfcore_report.pdf"
-    },
-    "created_at": "2025-11-29T00:28:42.242535"
-  },
-  "0576ca40": {
-    "job_id": "0576ca40",
-    "model_name": "cnn_halfcore_disbond_classifier",
-    "labels": [
-      "0.5_disbond",
-      "0.5_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "complete",
-    "current_step": 4,
-    "current_epoch": 39,
-    "total_epochs": 1000,
-    "progress_message": "Training complete!",
-    "error_message": null,
-    "result": {
-      "accuracy": "94.1%",
-      "loss": "0.1636",
-      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_halfcore_disbond_classifier",
-      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_halfcore_disbond_classifier/cnn_halfcore_report.pdf"
-    },
-    "created_at": "2025-11-29T00:50:28.413908"
-  },
-  "e352f00e": {
-    "job_id": "e352f00e",
-    "model_name": "cnn_half_disbond_crushcore",
-    "labels": [
-      "0.5_disbond",
-      "0.5_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "complete",
-    "current_step": 4,
-    "current_epoch": 40,
-    "total_epochs": 1000,
-    "progress_message": "Training complete!",
-    "error_message": null,
-    "result": {
-      "accuracy": "100.0%",
-      "loss": "0.1019",
-      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_disbond_crushcore",
-      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_disbond_crushcore/cnn_half_disbond_report.pdf"
-    },
-    "created_at": "2025-11-29T01:08:46.856248"
-  },
-  "20107d29": {
-    "job_id": "20107d29",
-    "model_name": "cnn_half_disbond_crushcore_2",
-    "labels": [
-      "0.5_disbond",
-      "0.5_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "complete",
-    "current_step": 4,
-    "current_epoch": 40,
-    "total_epochs": 1000,
-    "progress_message": "Training complete!",
-    "error_message": null,
-    "result": {
-      "accuracy": "88.2%",
-      "loss": "0.3697",
-      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_disbond_crushcore_2",
-      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_disbond_crushcore_2/cnn2_report.pdf"
-    },
-    "created_at": "2025-11-29T01:17:30.221195"
-  },
-  "99974d1a": {
-    "job_id": "99974d1a",
-    "model_name": "cnn_disbond_crushcore",
-    "labels": [
-      "1.0_disbond",
-      "1.0_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "complete",
-    "current_step": 4,
-    "current_epoch": 31,
-    "total_epochs": 1000,
-    "progress_message": "Training complete!",
-    "error_message": null,
-    "result": {
-      "accuracy": "80.0%",
-      "loss": "0.3307",
-      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_disbond_crushcore",
-      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_disbond_crushcore/cnn_disbond_crushcore_report.pdf"
-    },
-    "created_at": "2025-11-29T01:26:29.746800"
-  },
-  "a9bccac0": {
-    "job_id": "a9bccac0",
-    "model_name": "cnn_disbond_crushcore",
-    "labels": [
-      "1.0_disbond",
-      "1.0_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "training",
-    "current_step": 3,
-    "current_epoch": 37,
-    "total_epochs": 1000,
-    "progress_message": "Epoch 37/1000 - Acc: 0.975, Val Acc: 0.947",
-    "error_message": null,
-    "result": null,
-    "created_at": "2025-11-29T01:32:08.422227"
-  },
-  "5445f070": {
-    "job_id": "5445f070",
-    "model_name": "cnn_disbond_crushcore",
-    "labels": [
-      "1.0_disbond",
-      "1.0_crushcore"
-    ],
-    "architecture": "CNN",
-    "status": "complete",
-    "current_step": 4,
-    "current_epoch": 26,
-    "total_epochs": 1000,
-    "progress_message": "Training complete!",
-    "error_message": null,
-    "result": {
-      "accuracy": "85.0%",
-      "loss": "0.3754",
-      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_disbond_crushcore",
-      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_disbond_crushcore/cnn_disbond_crushcore_report.pdf"
-    },
-    "created_at": "2025-11-29T01:38:33.104633"
-  },
   "88083683": {
     "job_id": "88083683",
     "model_name": "cnn_half_disbond_classifier_3",
@@ -185,5 +36,110 @@
     "error_message": null,
     "result": null,
     "created_at": "2025-11-29T01:49:04.876119"
+  },
+  "b6af9d88": {
+    "job_id": "b6af9d88",
+    "model_name": "cnn_half_full_disbond",
+    "labels": [
+      "1.0_disbond",
+      "0.5_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 37,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "85.7%",
+      "loss": "0.8133",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_full_disbond",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_full_disbond/cnn_half_full_disbond_report.pdf"
+    },
+    "created_at": "2025-11-29T02:30:30.342298"
+  },
+  "45445c4f": {
+    "job_id": "45445c4f",
+    "model_name": "cnn_half_full_disbond_2",
+    "labels": [
+      "0.5_disbond",
+      "1.0_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 38,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "85.7%",
+      "loss": "0.2918",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_full_disbond_2",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_half_full_disbond_2/cnn_half_full_disbond_report.pdf"
+    },
+    "created_at": "2025-12-01T03:30:19.924393"
+  },
+  "3f80d288": {
+    "job_id": "3f80d288",
+    "model_name": "cnn_quarter_half_disbond",
+    "labels": [
+      "0.25_disbond",
+      "0.5_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 38,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "81.2%",
+      "loss": "0.3044",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_quarter_half_disbond",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_quarter_half_disbond/cnn_quarter_half_disbond_report.pdf"
+    },
+    "created_at": "2025-12-01T03:41:45.169752"
+  },
+  "314447fe": {
+    "job_id": "314447fe",
+    "model_name": "cnn_quarter_crush_disbond",
+    "labels": [
+      "0.25_crush",
+      "0.25_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 45,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "91.7%",
+      "loss": "0.1335",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnn_quarter_crush_disbond",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnn_quarter_crush_disbond/quarter_crush_disbond_cnn_report.pdf"
+    },
+    "created_at": "2025-12-01T05:07:30.652329"
+  },
+  "9920cf87": {
+    "job_id": "9920cf87",
+    "model_name": "disbond_half_and_full",
+    "labels": [
+      "1.0_disbond",
+      "0.5_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "training",
+    "current_step": 3,
+    "current_epoch": 34,
+    "total_epochs": 1000,
+    "progress_message": "Epoch 34/1000 - Acc: 0.946, Val Acc: 0.846",
+    "error_message": null,
+    "result": null,
+    "created_at": "2025-12-01T05:11:32.206170"
   }
 }

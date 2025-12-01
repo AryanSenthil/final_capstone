@@ -11,6 +11,8 @@ import TrainingPage from "@/pages/training";
 import ModelsPage from "@/pages/models";
 import ModelDetailPage from "@/pages/model-detail";
 import ReportsPage from "@/pages/reports";
+import TestingPage from "@/pages/testing";
+import ChatPage from "@/pages/chat";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -24,6 +26,8 @@ function Router() {
         <Route path="/models" component={ModelsPage} />
         <Route path="/models/:id" component={ModelDetailPage} />
         <Route path="/reports" component={ReportsPage} />
+        <Route path="/testing" component={TestingPage} />
+        <Route path="/chat" component={ChatPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

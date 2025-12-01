@@ -1,31 +1,35 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useTheme } from "next-themes";
-import { Database, FileText, Menu, X, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, Sun, Moon, Rocket, Layers, ScrollText } from "lucide-react";
+import { Database, FileText, Menu, X, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, Sun, Moon, Network, Layers, ScrollText, FlaskConical, Settings, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { SettingsDialog } from "@/components/settings-dialog";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   const navItems = [
     { label: "Database", href: "/", icon: Database },
     { label: "Raw Files", href: "/raw", icon: FileText },
-    { label: "Training", href: "/training", icon: Rocket },
+    { label: "Training", href: "/training", icon: Network },
     { label: "Models", href: "/models", icon: Layers },
+    { label: "Testing", href: "/testing", icon: FlaskConical },
     { label: "Reports", href: "/reports", icon: ScrollText },
+    { label: "Assistant", href: "/chat", icon: MessageSquare },
   ];
 
   return (
-    <div className="min-h-screen flex font-sans bg-background text-foreground">
-      {/* Desktop Sidebar */}
+    <div className="h-screen flex font-sans bg-background text-foreground overflow-hidden">
+      {/* Desktop Sidebar - Fixed height, no scroll */}
       <aside
         className={cn(
-          "hidden md:flex flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out relative z-20",
+          "hidden md:flex flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out relative z-20 h-screen shrink-0",
           isCollapsed ? "w-16" : "w-56"
         )}
       >
@@ -76,6 +80,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="sm"
             className={cn("w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isCollapsed ? "px-0" : "justify-start")}
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+            {!isCollapsed && <span className="ml-2">Settings</span>}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isCollapsed ? "px-0" : "justify-start")}
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             title="Toggle Theme"
           >
@@ -96,9 +111,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Header & Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Mobile Header */}
-        <header className="md:hidden sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur flex items-center px-4 h-14">
+        <header className="md:hidden sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur flex items-center px-4 h-14 shrink-0">
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="-ml-2">
@@ -132,13 +147,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <span className="font-bold text-lg ml-2 text-primary">Aryan Senthil</span>
         </header>
 
-        {/* Main Content Area - Wider */}
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
-           <div className="max-w-[1600px] mx-auto w-full">
+        {/* Main Content Area - Scrollable */}
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto overflow-x-hidden relative">
+           <div className="max-w-[1600px] mx-auto w-full h-full">
              {children}
            </div>
         </main>
       </div>
+
+      {/* Settings Dialog */}
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

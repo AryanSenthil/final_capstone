@@ -31,7 +31,7 @@ export function ArchitectureSelector({ selected, onChange }: ArchitectureSelecto
                   "relative flex items-center gap-3 px-3 py-2 rounded-lg border transition-all duration-200 text-left",
                   selected === "CNN"
                     ? "border-primary bg-primary/5 shadow-sm ring-0"
-                    : "border-border bg-card hover:border-primary/30 hover:bg-accent/50"
+                    : "border-border bg-card hover:border-primary/30 hover:bg-primary/5"
                 )}
               >
                 <div className={cn(
@@ -65,7 +65,7 @@ export function ArchitectureSelector({ selected, onChange }: ArchitectureSelecto
                   "relative flex items-center gap-3 px-3 py-2 rounded-lg border transition-all duration-200 text-left",
                   selected === "ResNet"
                     ? "border-primary bg-primary/5 shadow-sm ring-0"
-                    : "border-border bg-card hover:border-primary/30 hover:bg-accent/50"
+                    : "border-border bg-card hover:border-primary/30 hover:bg-primary/5"
                 )}
               >
                 <div className={cn(
