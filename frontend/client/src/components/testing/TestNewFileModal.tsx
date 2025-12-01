@@ -583,9 +583,11 @@ Please generate concise, professional notes (2-3 sentences) that would be approp
 
               {step < 2 && (
                 <Button
+                  variant="default"
                   onClick={() => setStep(step + 1)}
                   disabled={!canProceed()}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground ml-auto hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                  aria-label="Continue to next step"
+                  className="ml-auto"
                 >
                   Continue
                   <ArrowRight className="h-4 w-4 ml-2" />
@@ -594,8 +596,10 @@ Please generate concise, professional notes (2-3 sentences) that would be approp
 
               {step === 2 && (
                 <Button
+                  variant="default"
                   onClick={runInference}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground ml-auto hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                  aria-label="Run inference on uploaded file"
+                  className="ml-auto"
                 >
                   Run Inference
                   <ArrowRight className="h-4 w-4 ml-2" />
@@ -604,8 +608,10 @@ Please generate concise, professional notes (2-3 sentences) that would be approp
 
               {step === 3 && !isProcessing && (
                 <Button
+                  variant="default"
                   onClick={resetAndClose}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground ml-auto hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                  aria-label="Close test modal"
+                  className="ml-auto"
                 >
                   Done
                 </Button>

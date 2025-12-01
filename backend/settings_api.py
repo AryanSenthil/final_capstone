@@ -146,24 +146,81 @@ async def update_settings(updates: SettingsUpdate) -> SettingsResponse:
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {e}")
 
 
+@router.get("/api-key")
+async def get_api_key_status():
+    """
+    Check if API key is configured (returns masked version or status).
+    """
+    import os
+
+    env_file = Path(__file__).parent / ".env"
+
+    # Check if .env file exists and has OPENAI_API_KEY
+    api_key = None
+    if env_file.exists():
+        env_content = env_file.read_text()
+        for line in env_content.split('\n'):
+            if line.strip().startswith('OPENAI_API_KEY='):
+                api_key = line.split('=', 1)[1].strip().strip('"').strip("'")
+                break
+
+    # Also check environment variable
+    if not api_key:
+        api_key = os.getenv("OPENAI_API_KEY")
+
+    if api_key:
+        # Return masked key (show first 7 chars and last 4 chars)
+        if len(api_key) > 11:
+            masked = f"{api_key[:7]}...{api_key[-4:]}"
+        else:
+            masked = "sk-...****"
+        return {
+            "configured": True,
+            "masked_key": masked
+        }
+
+    return {"configured": False, "masked_key": None}
+
+
 @router.post("/api-key")
 async def update_api_key(update: ApiKeyUpdate):
     """
-    Update OpenAI API key in environment.
-    This endpoint stores the API key temporarily in memory for the current session.
+    Update OpenAI API key in .env file and environment.
+    Persists the key across server restarts.
     """
     import os
     from openai import OpenAI
 
     try:
-        # Set the environment variable
+        env_file = Path(__file__).parent / ".env"
+
+        # Read existing .env content
+        env_lines = []
+        if env_file.exists():
+            env_lines = env_file.read_text().split('\n')
+
+        # Update or add OPENAI_API_KEY
+        key_found = False
+        for i, line in enumerate(env_lines):
+            if line.strip().startswith('OPENAI_API_KEY='):
+                env_lines[i] = f'OPENAI_API_KEY="{update.api_key}"'
+                key_found = True
+                break
+
+        if not key_found:
+            env_lines.append(f'OPENAI_API_KEY="{update.api_key}"')
+
+        # Write back to .env file
+        env_file.write_text('\n'.join(env_lines))
+
+        # Set the environment variable for current session
         os.environ["OPENAI_API_KEY"] = update.api_key
 
         # Reinitialize the OpenAI client in api.py
         import api
         api.openai_client = OpenAI(api_key=update.api_key) if update.api_key else None
 
-        return {"success": True, "message": "API key updated successfully"}
+        return {"success": True, "message": "API key saved to .env file successfully"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update API key: {e}")

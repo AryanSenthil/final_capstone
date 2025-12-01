@@ -68,7 +68,13 @@ export default function TestRow({ test, isExpanded, onToggle, onDelete }: TestRo
           </span>
         </div>
 
-        <div className="flex-1 min-w-[180px] pr-2 flex flex-col">
+        <div className="w-52 flex-shrink-0 pr-4">
+          <span className="text-sm text-muted-foreground truncate block">
+            {test.model_name}
+          </span>
+        </div>
+
+        <div className="flex-1 min-w-[180px] flex flex-col">
           <span className="text-xs font-medium text-foreground truncate" title={test.csv_filename}>
             {test.csv_filename}
           </span>
@@ -77,12 +83,6 @@ export default function TestRow({ test, isExpanded, onToggle, onDelete }: TestRo
               {test.original_csv_path}
             </span>
           )}
-        </div>
-
-        <div className="w-40 flex-shrink-0 pr-2">
-          <span className="text-sm text-muted-foreground break-all">
-            {test.model_name}
-          </span>
         </div>
 
         <div className="w-28 flex-shrink-0">

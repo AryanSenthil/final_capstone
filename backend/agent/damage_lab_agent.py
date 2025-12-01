@@ -1819,7 +1819,9 @@ def get_report_url(model_id: str) -> dict:
             }
 
         report_file = pdf_files[0]
-        report_url = f"/api/reports/{model_id}/{report_file.name}"
+        # Use the correct endpoint format with path query parameter
+        report_path = str(report_file.absolute())
+        report_url = f"/api/training/report/download?path={report_path}"
 
         return {
             "status": "success",

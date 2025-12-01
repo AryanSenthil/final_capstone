@@ -19,7 +19,30 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      // Base layout and typography
+      "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md px-3 py-2 text-sm",
+      // Glass effect: subtle backdrop blur with semi-transparent background
+      "glass-light bg-transparent backdrop-blur-sm",
+      // Border: glass border with focus glow
+      "border border-[--glass-border]",
+      // Shadow: subtle depth
+      "shadow-sm",
+      // Transitions: smooth for all properties
+      "transition-all duration-200",
+      // Focus state: glass glow and enhanced border
+      "focus:outline-none focus:border-[--glass-border-focus] focus:shadow-[--glass-shadow-hover,--glass-glow] focus:bg-[--glass-bg]",
+      // Hover state: subtle highlight and scale
+      "hover:border-[--glass-border-hover] hover:bg-[--glass-bg]/50 hover:scale-[1.01]",
+      // Active state
+      "active:scale-[0.99]",
+      // Placeholder styling
+      "data-[placeholder]:text-muted-foreground/60",
+      // Disabled state: glass-disabled appearance
+      "disabled:glass-disabled disabled:cursor-not-allowed",
+      // Text overflow handling
+      "[&>span]:line-clamp-1",
+      // Ring offset for accessibility
+      "ring-offset-background",
       className
     )}
     {...props}
@@ -75,7 +98,22 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
+        // Base layout
+        "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md",
+        // Glass effect: frosted glass for dropdown with enhanced blur
+        "glass-frosted text-popover-foreground",
+        // Enhanced shadow for floating effect
+        "shadow-[--glass-shadow-hover]",
+        // Transform origin for animations
+        "origin-[--radix-select-content-transform-origin]",
+        // Animations: fade and zoom
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        // Slide animations based on position
+        "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
+        "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        // Position-based transforms for popper
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
@@ -118,7 +156,19 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      // Base layout
+      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none",
+      // Glass hover effect with smooth transition
+      "transition-all duration-150",
+      "hover:bg-[--glass-bg-hover] hover:shadow-sm hover:scale-[1.01]",
+      // Focus state with glass effect and blue highlight
+      "focus:bg-primary/10 focus:text-primary focus:shadow-[--glass-shadow]",
+      // Active state
+      "active:scale-[0.99]",
+      // Disabled state
+      "data-[disabled]:glass-disabled data-[disabled]:pointer-events-none",
+      // Keyboard navigation
+      "aria-[selected=true]:bg-primary/10 aria-[selected=true]:text-primary",
       className
     )}
     {...props}

@@ -37,8 +37,10 @@ export default function StatsPanel({
   return (
     <div className="space-y-6">
       <Button
+        variant="default"
         onClick={onTestNewFile}
-        className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-lg transition-all hover:shadow-xl"
+        aria-label="Test new file"
+        className="w-full h-14 font-semibold text-base shadow-lg"
       >
         <Plus className="h-5 w-5 mr-2" />
         Test New File

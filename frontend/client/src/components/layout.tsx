@@ -28,15 +28,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen flex font-sans bg-background text-foreground overflow-hidden">
-      {/* Desktop Sidebar - Fixed height, no scroll */}
+      {/* Desktop Sidebar - Fixed height, no scroll with glass effect */}
       <aside
         className={cn(
-          "hidden md:flex flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out relative z-20 h-screen shrink-0",
+          // Layout and positioning
+          "hidden md:flex flex-col relative z-20 h-screen shrink-0",
+          // Glass effect: frosted sidebar with blur
+          "glass bg-sidebar/80 text-sidebar-foreground backdrop-blur-lg",
+          // Border with glass glow
+          "border-r border-[--glass-border]",
+          // Smooth transitions for collapse animation
+          "transition-all duration-300 ease-in-out",
+          // Width based on collapsed state
           isCollapsed ? "w-16" : "w-56"
         )}
       >
-        {/* Sidebar Header */}
-        <div className="h-14 flex items-center px-4 border-b border-sidebar-border">
+        {/* Sidebar Header with glass border */}
+        <div className="h-14 flex items-center px-4 border-b border-[--glass-border]">
           {!isCollapsed && (
             <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-primary overflow-hidden whitespace-nowrap">
                Aryan Senthil
@@ -61,13 +69,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Link key={item.href} href={item.href}>
               <a
                 className={cn(
-                  "flex items-center gap-2 px-2 py-2 rounded-md text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group",
+                  // Base layout
+                  "flex items-center gap-2 px-2 py-2 rounded-md text-sm font-medium group",
+                  // Glass interactive effect
+                  "transition-all duration-200",
+                  "hover:glass-light hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:scale-[1.02]",
+                  "active:scale-[0.98]",
+                  // Focus state with glass glow
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--glass-border-focus]",
+                  // Active route styling
                   location === item.href || (item.href !== "/" && location.startsWith(item.href))
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    ? "glass-light bg-sidebar-accent text-sidebar-accent-foreground shadow-[--glass-shadow]"
                     : "text-muted-foreground",
-                  isCollapsed && "justify-center"
+                  // Collapsed state
+                  isCollapsed && "justify-center",
+                  // Keyboard navigation
+                  "cursor-pointer"
                 )}
                 title={isCollapsed ? item.label : undefined}
+                aria-label={item.label}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}
               >
                 <item.icon className={cn("h-4 w-4 shrink-0", location === item.href && "text-primary")} />
                 {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -76,8 +103,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </div>
 
-        {/* Sidebar Footer / Collapse Toggle */}
-        <div className="p-2 border-t border-sidebar-border flex flex-col gap-1">
+        {/* Sidebar Footer / Collapse Toggle with glass border */}
+        <div className="p-2 border-t border-[--glass-border] flex flex-col gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -125,8 +152,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Header & Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Mobile Header */}
-        <header className="md:hidden sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur flex items-center px-4 h-14 shrink-0">
+        {/* Mobile Header with glass effect */}
+        <header className="md:hidden sticky top-0 z-50 w-full glass bg-background/70 backdrop-blur-lg border-b border-[--glass-border] flex items-center px-4 h-14 shrink-0 shadow-[--glass-shadow]">
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="-ml-2">

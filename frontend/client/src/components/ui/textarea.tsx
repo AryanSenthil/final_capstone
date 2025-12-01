@@ -9,7 +9,28 @@ const Textarea = React.forwardRef<
   return (
     <textarea
       className={cn(
-        "flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        // Base layout and typography
+        "flex min-h-[60px] w-full rounded-md px-3 py-2 text-base md:text-sm",
+        // Glass effect: subtle backdrop blur with semi-transparent background
+        "glass-light bg-transparent backdrop-blur-sm",
+        // Border: glass border with focus glow
+        "border border-[--glass-border]",
+        // Shadow: subtle depth
+        "shadow-sm",
+        // Transitions: smooth for all properties
+        "transition-all duration-200",
+        // Focus state: glass glow and enhanced border
+        "focus-visible:outline-none focus-visible:border-[--glass-border-focus] focus-visible:shadow-[--glass-shadow-hover,--glass-glow] focus-visible:bg-[--glass-bg]",
+        // Hover state: subtle highlight
+        "hover:border-[--glass-border-hover] hover:bg-[--glass-bg]/50",
+        // Placeholder styling
+        "placeholder:text-muted-foreground/60",
+        // Disabled state: glass-disabled appearance
+        "disabled:glass-disabled disabled:cursor-not-allowed",
+        // Accessibility
+        "aria-[invalid]:border-destructive aria-[invalid]:focus-visible:shadow-red-500/20",
+        // Resize handle
+        "resize-y",
         className
       )}
       ref={ref}

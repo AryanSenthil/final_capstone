@@ -187,7 +187,9 @@ export default function ExpandedTestDetails({ test, onDelete }: ExpandedTestDeta
               <div className="flex items-center gap-3">
                 <Button
                   onClick={handleDownload}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground h-10 px-5 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                  variant="default"
+                  aria-label="Download CSV file"
+                  className="h-10 px-5"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download CSV
@@ -196,7 +198,8 @@ export default function ExpandedTestDetails({ test, onDelete }: ExpandedTestDeta
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
-                      className="h-10 px-4 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                      aria-label="Test actions menu"
+                      className="h-10 px-4"
                     >
                       <MoreVertical className="h-4 w-4 mr-2" />
                       Actions
@@ -333,16 +336,19 @@ export default function ExpandedTestDetails({ test, onDelete }: ExpandedTestDeta
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowNotesEditor(false)}
-                  className="h-8 hover:scale-105 active:scale-95 transition-all duration-200"
+                  aria-label="Cancel editing notes"
+                  className="h-8"
                 >
                   <X size={14} className="mr-1" />
                   Cancel
                 </Button>
                 <Button
+                  variant="default"
                   size="sm"
                   onClick={handleSaveNotes}
                   disabled={updateNotesMutation.isPending}
-                  className="h-8 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                  aria-label="Save test notes"
+                  className="h-8"
                 >
                   {updateNotesMutation.isPending ? (
                     <Loader2 size={14} className="mr-1 animate-spin" />

@@ -209,9 +209,18 @@ const markdownComponents = {
 function ImageArtifact({ artifact, onExpand }: { artifact: Artifact; onExpand: () => void }) {
   if (!artifact.data) return null;
 
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = `data:image/${artifact.format || "png"};base64,${artifact.data}`;
+    link.download = artifact.name || `graph.${artifact.format || "png"}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="relative group my-3 max-w-md">
-      <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+      <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow">
         <img
           src={`data:image/${artifact.format || "png"};base64,${artifact.data}`}
           alt={artifact.name}
@@ -220,17 +229,31 @@ function ImageArtifact({ artifact, onExpand }: { artifact: Artifact; onExpand: (
         />
       </div>
       <div className="flex items-center justify-between mt-2 px-1">
-        <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-          <ImageIcon className="w-3 h-3" />
+        <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-medium">
+          <ImageIcon className="w-3.5 h-3.5" />
           {artifact.name}
         </span>
-        <button
-          onClick={onExpand}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <ZoomIn className="w-3 h-3" />
-          Expand
-        </button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDownload}
+            className="h-7 px-2 gap-1.5 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400"
+            title="Download image"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onExpand}
+            className="h-7 px-2 gap-1.5 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+            Expand
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -349,20 +372,40 @@ function ImageExpandModal({
 }) {
   if (!artifact || !artifact.data) return null;
 
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = `data:image/${artifact.format || "png"};base64,${artifact.data}`;
+    link.download = artifact.name || `graph.${artifact.format || "png"}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-        <DialogHeader className="p-4 pb-2">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+        <DialogHeader className="p-4 pb-2 flex flex-row items-center justify-between border-b">
           <DialogTitle className="text-base font-medium flex items-center gap-2">
-            <ImageIcon className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+              <ImageIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
             {artifact.name}
           </DialogTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            className="mr-6 gap-1.5 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300"
+          >
+            <Download className="w-4 h-4" />
+            Download Image
+          </Button>
         </DialogHeader>
-        <div className="px-4 pb-4 overflow-auto">
+        <div className="px-4 pb-4 overflow-auto bg-zinc-200/50 dark:bg-zinc-950/50 flex justify-center items-center">
           <img
             src={`data:image/${artifact.format || "png"};base64,${artifact.data}`}
             alt={artifact.name}
-            className="w-full h-auto rounded-lg"
+            className="max-w-full h-auto rounded-lg shadow-xl"
           />
         </div>
       </DialogContent>

@@ -72,8 +72,6 @@ export default function SearchFilterBar({
           <SelectItem value="timestamp-asc">Oldest First</SelectItem>
           <SelectItem value="confidence-desc">Highest Confidence</SelectItem>
           <SelectItem value="confidence-asc">Lowest Confidence</SelectItem>
-          <SelectItem value="execution-desc">Slowest First</SelectItem>
-          <SelectItem value="execution-asc">Fastest First</SelectItem>
         </SelectContent>
       </Select>
     </div>

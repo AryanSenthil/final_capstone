@@ -253,7 +253,7 @@ export default function ReportsPage() {
          </div>
          <div className="h-6 w-px bg-border mx-2" />
          <Select value={modelFilter} onValueChange={setModelFilter}>
-           <SelectTrigger className="w-[160px] h-10 rounded-xl border-none bg-transparent hover:bg-muted/50 transition-colors">
+           <SelectTrigger className="w-[200px] h-10 rounded-xl border-none bg-transparent hover:bg-muted/50 transition-colors">
              <SelectValue placeholder="All Models" />
            </SelectTrigger>
            <SelectContent>
@@ -265,7 +265,7 @@ export default function ReportsPage() {
          </Select>
          <div className="h-6 w-px bg-border" />
          <Select value={sortBy} onValueChange={setSortBy}>
-           <SelectTrigger className="w-[160px] h-10 rounded-xl border-none bg-transparent hover:bg-muted/50 transition-colors">
+           <SelectTrigger className="w-[200px] h-10 rounded-xl border-none bg-transparent hover:bg-muted/50 transition-colors">
              <ArrowUpDown size={14} className="mr-2 text-muted-foreground" />
              <SelectValue placeholder="Sort by" />
            </SelectTrigger>

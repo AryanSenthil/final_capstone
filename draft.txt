@@ -1,7 +1,0 @@
-in the model saved page, when i click on a model it shows more details which is perfect, i want to be able to save the training accuracy graph and the loss graph as csv files
-generate the csv files using the data you are using to graph and let the user download it as a csv file using the name of the model + like traning loss csv or training accuracy graph 
-
-i want a openai api key input dialog where the user can input the api key, that way the the .env file api is inputted by the user in the frontend, add the button to go this dialog on top of the settings in the navigariton page 
-like the user doens't have access to the .env file and the user can pay for the api 
-
-in the model saved pages in the graphs i liek everything just increase the gap between the label of the traning loss vall loss, and training accuracy val accuracy when refering to it in the graphing 

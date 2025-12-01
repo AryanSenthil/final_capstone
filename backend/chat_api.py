@@ -264,6 +264,128 @@ def generate_session_id() -> str:
     return str(uuid.uuid4())[:12]
 
 
+def truncate_large_content(content: str, max_length: int = 5000) -> str:
+    """
+    Truncate large content (like base64 images) to prevent token overflow.
+    Detects base64 data and replaces with placeholder.
+    """
+    if not content:
+        return content
+
+    # Check if content contains base64 image data
+    if "data:image" in content and "base64," in content:
+        # Extract everything before the base64 data
+        parts = content.split("base64,")
+        if len(parts) > 1:
+            return parts[0] + "base64,[BASE64_IMAGE_DATA_TRUNCATED]"
+
+    # Check for large JSON with base64 fields
+    if len(content) > max_length and ("base64" in content.lower() or "data:image" in content):
+        try:
+            data = json.loads(content)
+            # Truncate any base64 fields
+            if isinstance(data, dict):
+                for key in data:
+                    if isinstance(data[key], str) and len(data[key]) > 1000:
+                        if data[key].startswith("data:image") or "base64" in key.lower():
+                            data[key] = "[BASE64_DATA_TRUNCATED]"
+                return json.dumps(data)
+        except:
+            pass
+
+    # If still too large, truncate with message
+    if len(content) > max_length:
+        return content[:max_length] + f"\n\n[TRUNCATED - {len(content) - max_length} more characters]"
+
+    return content
+
+
+def estimate_token_count(messages: list) -> int:
+    """
+    Rough estimate of token count for messages.
+    Approximation: 1 token ≈ 4 characters
+    """
+    total_chars = 0
+    for msg in messages:
+        if isinstance(msg.get("content"), str):
+            total_chars += len(msg["content"])
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                total_chars += len(str(tc))
+    return total_chars // 4
+
+
+async def summarize_old_messages(client: OpenAI, messages: list, keep_recent: int = 10) -> list:
+    """
+    Summarize older messages to reduce token count.
+    Keeps system message, recent messages, and creates a summary of the middle.
+
+    Args:
+        client: OpenAI client
+        messages: Full message history
+        keep_recent: Number of recent messages to keep as-is
+
+    Returns:
+        Condensed message list with summary
+    """
+    if len(messages) <= keep_recent + 1:  # +1 for system message
+        return messages
+
+    # Separate system message, old messages, and recent messages
+    system_msg = messages[0] if messages[0]["role"] == "system" else None
+    start_idx = 1 if system_msg else 0
+
+    if len(messages) - start_idx <= keep_recent:
+        return messages
+
+    old_messages = messages[start_idx:-keep_recent]
+    recent_messages = messages[-keep_recent:]
+
+    # Create summary of old messages
+    summary_prompt = f"""Summarize this conversation history concisely. Focus on:
+1. Key actions taken (datasets created, models trained, tests run)
+2. Important findings or results
+3. User's goals and context
+
+Conversation to summarize:
+{json.dumps(old_messages, indent=2)}
+
+Provide a brief summary (2-3 paragraphs max):"""
+
+    try:
+        summary_response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that summarizes conversations concisely."},
+                {"role": "user", "content": summary_prompt}
+            ]
+        )
+        summary = summary_response.choices[0].message.content
+
+        # Build new message list with summary
+        new_messages = []
+        if system_msg:
+            new_messages.append(system_msg)
+
+        new_messages.append({
+            "role": "system",
+            "content": f"Previous conversation summary:\n{summary}\n\nContinuing from here with recent messages..."
+        })
+
+        new_messages.extend(recent_messages)
+
+        return new_messages
+
+    except Exception as e:
+        print(f"Failed to summarize messages: {e}")
+        # Fallback: just keep recent messages
+        result = []
+        if system_msg:
+            result.append(system_msg)
+        result.extend(recent_messages)
+        return result
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -290,6 +412,17 @@ async def send_message(request: ChatRequest):
 
     # Add user message
     messages.append({"role": "user", "content": request.message})
+
+    # Check token count and summarize if needed
+    estimated_tokens = estimate_token_count(messages)
+    TOKEN_LIMIT = 200000  # Conservative limit (gpt-4o has 270k context)
+
+    if estimated_tokens > TOKEN_LIMIT:
+        print(f"Token count ({estimated_tokens}) exceeds limit. Summarizing conversation...")
+        messages = await summarize_old_messages(client, messages, keep_recent=15)
+        # Save the summarized session
+        save_session(session_id, messages)
+        print(f"Summarized. New token count: {estimate_token_count(messages)}")
 
     max_iterations = 10
     iterations = 0
@@ -363,10 +496,13 @@ async def send_message(request: ChatRequest):
                     "result": json.loads(result) if result else None
                 })
 
+                # Truncate large content (base64 images, PDFs) before saving to history
+                truncated_result = truncate_large_content(result) if result else result
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": result
+                    "content": truncated_result
                 })
         else:
             # Final response
@@ -414,6 +550,19 @@ async def stream_message(request: StreamChatRequest):
         yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
         messages.append({"role": "user", "content": request.message})
+
+        # Track artifacts across all tool calls for this response
+        collected_artifacts = []
+
+        # Check token count and summarize if needed
+        estimated_tokens = estimate_token_count(messages)
+        TOKEN_LIMIT = 200000  # Conservative limit
+
+        if estimated_tokens > TOKEN_LIMIT:
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Conversation is long. Summarizing older messages...'})}\n\n"
+            messages = await summarize_old_messages(client, messages, keep_recent=15)
+            save_session(session_id, messages)
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Summary complete. Continuing...'})}\n\n"
 
         max_iterations = 10
         iterations = 0
@@ -481,12 +630,16 @@ async def stream_message(request: StreamChatRequest):
                         artifacts = result_parsed.get("artifacts", [])
                         for artifact in artifacts:
                             if artifact:  # Filter out None artifacts
+                                collected_artifacts.append(artifact)
                                 yield f"data: {json.dumps({'type': 'artifact', 'artifact': artifact})}\n\n"
+
+                    # Truncate large content (base64 images, PDFs) before saving to history
+                    truncated_result = truncate_large_content(result) if result else result
 
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": result
+                        "content": truncated_result
                     })
 
                     await asyncio.sleep(0.01)  # Small delay between tool calls
@@ -501,10 +654,15 @@ async def stream_message(request: StreamChatRequest):
                     yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
                     await asyncio.sleep(0.02)
 
-                messages.append({
+                # Save assistant message with artifacts
+                assistant_message = {
                     "role": "assistant",
                     "content": content
-                })
+                }
+                if collected_artifacts:
+                    assistant_message["artifacts"] = collected_artifacts
+
+                messages.append(assistant_message)
                 save_session(session_id, messages)
 
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -579,12 +737,15 @@ async def get_session(session_id: str):
 
     messages = load_session(session_id)
 
-    # Filter to only user/assistant messages for display
-    display_messages = [
-        {"role": m["role"], "content": m.get("content", "")}
-        for m in messages
-        if m.get("role") in ["user", "assistant"] and m.get("content")
-    ]
+    # Filter to only user/assistant messages for display, include artifacts if present
+    display_messages = []
+    for m in messages:
+        if m.get("role") in ["user", "assistant"] and m.get("content"):
+            msg = {"role": m["role"], "content": m.get("content", "")}
+            # Include artifacts if they exist
+            if "artifacts" in m:
+                msg["artifacts"] = m["artifacts"]
+            display_messages.append(msg)
 
     return SessionMessages(session_id=session_id, messages=display_messages)
 

@@ -10,10 +10,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Import placeholder assets
-import accuracyImg from "@assets/generated_images/line_chart_showing_training_accuracy_increasing_over_epochs.png";
-import lossImg from "@assets/generated_images/line_chart_showing_training_loss_decreasing_over_epochs.png";
-import matrixImg from "@assets/generated_images/confusion_matrix_heatmap_visualization.png";
+// Placeholder images as data URLs (temporary until real graphs are available)
+const accuracyImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f0f0f0' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='16' fill='%23999' text-anchor='middle' dy='.3em'%3EAccuracy Chart Placeholder%3C/text%3E%3C/svg%3E";
+const lossImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f0f0f0' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='16' fill='%23999' text-anchor='middle' dy='.3em'%3ELoss Chart Placeholder%3C/text%3E%3C/svg%3E";
+const matrixImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f0f0f0' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='16' fill='%23999' text-anchor='middle' dy='.3em'%3EConfusion Matrix Placeholder%3C/text%3E%3C/svg%3E";
 
 interface GraphData {
   accuracy?: string;

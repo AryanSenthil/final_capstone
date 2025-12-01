@@ -29,16 +29,20 @@ notebook
 streamlit
 uvicorn
 fastapi
+sse-starlette
 
 # HTTP clients
 httpx
+httpx-sse
 aiohttp
 requests
 
-# API clients
+# AI/LLM API clients
 anthropic
 openai
 tiktoken
+litellm
+letta-client
 
 # Database
 sqlalchemy
@@ -61,6 +65,8 @@ rich
 tqdm
 click
 watchdog
+markdown
+markdown-it-py
 
 # Async
 anyio
@@ -78,12 +84,6 @@ gitpython
 h5py
 joblib
 
-openai
-
-# Letta client
-letta-client
-
-# PDF Generation & Google ADK (for training module)
+# PDF Generation & Google ADK
 reportlab
 google-adk
-litellm
