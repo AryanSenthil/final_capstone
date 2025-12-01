@@ -61,14 +61,23 @@ def capture_training(
         def __init__(self, buffer, original):
             self.buffer = buffer
             self.original = original
-        
+
         def write(self, text):
             self.buffer.write(text)
             self.original.write(text)
-        
+
         def flush(self):
             self.buffer.flush()
             self.original.flush()
+
+        def fileno(self):
+            # Return the original stdout's file descriptor
+            # This is needed by libraries like TensorFlow/Keras for progress bars
+            return self.original.fileno()
+
+        def isatty(self):
+            # Some libraries also check isatty()
+            return self.original.isatty()
     
     tee = TeeOutput(output_buffer, sys.stdout)
     old_stdout = sys.stdout

@@ -43,14 +43,23 @@ def capture_output(func, *args, **kwargs):
         def __init__(self, buf, original):
             self.buf = buf
             self.original = original
-        
+
         def write(self, text):
             self.buf.write(text)
             self.original.write(text)
-        
+
         def flush(self):
             self.buf.flush()
             self.original.flush()
+
+        def fileno(self):
+            # Return the original stdout's file descriptor
+            # This is needed by libraries like TensorFlow/Keras for progress bars
+            return self.original.fileno()
+
+        def isatty(self):
+            # Some libraries also check isatty()
+            return self.original.isatty()
     
     tee = TeeOutput(buffer, sys.stdout)
     old_stdout = sys.stdout

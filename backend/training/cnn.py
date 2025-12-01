@@ -279,7 +279,7 @@ def run_pipeline(
         print("TRAINING COMPLETE")
         print("=" * 60)
 
-    return TrainingResult(
+    result = TrainingResult(
         model=model,
         history=history.history,
         metadata=metadata,
@@ -293,3 +293,13 @@ def run_pipeline(
         graph_paths=graph_paths,
         graph_base64=graph_base64
     )
+
+    # Clean up GPU memory after training
+    try:
+        tf.keras.backend.clear_session()
+        import gc
+        gc.collect()
+    except Exception:
+        pass  # Non-fatal
+
+    return result

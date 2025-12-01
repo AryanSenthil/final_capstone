@@ -141,5 +141,83 @@
     "error_message": null,
     "result": null,
     "created_at": "2025-12-01T05:11:32.206170"
+  },
+  "c8d14ad8": {
+    "job_id": "c8d14ad8",
+    "model_name": "cnn_half_full_disbond_3",
+    "labels": [
+      "0.5_disbond",
+      "1.0_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "error",
+    "current_step": 3,
+    "current_epoch": null,
+    "total_epochs": 1000,
+    "progress_message": "Error: 'TeeOutput' object has no attribute 'fileno'",
+    "error_message": "'TeeOutput' object has no attribute 'fileno'",
+    "result": null,
+    "created_at": "2025-12-01T05:35:42.123430"
+  },
+  "360529b3": {
+    "job_id": "360529b3",
+    "model_name": "cnn_half_full_disbond_3_retry",
+    "labels": [
+      "0.5_disbond",
+      "1.0_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "error",
+    "current_step": 3,
+    "current_epoch": null,
+    "total_epochs": 1000,
+    "progress_message": "Error: 'TeeOutput' object has no attribute 'fileno'",
+    "error_message": "'TeeOutput' object has no attribute 'fileno'",
+    "result": null,
+    "created_at": "2025-12-01T05:37:05.086750"
+  },
+  "2c2da6cb": {
+    "job_id": "2c2da6cb",
+    "model_name": "cnnfier",
+    "labels": [
+      "1.0_disbond",
+      "0.5_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 44,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "78.6%",
+      "loss": "1.3172",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnnfier",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnnfier/cnnfier_image_classifier_report.pdf"
+    },
+    "created_at": "2025-12-01T05:50:07.432181"
+  },
+  "1c5ff1ce": {
+    "job_id": "1c5ff1ce",
+    "model_name": "cnndisbond",
+    "labels": [
+      "0.5_disbond",
+      "1.0_disbond"
+    ],
+    "architecture": "CNN",
+    "status": "complete",
+    "current_step": 4,
+    "current_epoch": 33,
+    "total_epochs": 1000,
+    "progress_message": "Training complete!",
+    "error_message": null,
+    "result": {
+      "accuracy": "78.6%",
+      "loss": "0.3875",
+      "model_path": "/home/ari/Documents/final_capstone/backend/models/cnndisbond",
+      "report_path": "/home/ari/Documents/final_capstone/backend/models/cnndisbond/cnndisbond_inspector_report.pdf"
+    },
+    "created_at": "2025-12-01T05:59:13.136122"
   }
 }

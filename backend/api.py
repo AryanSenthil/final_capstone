@@ -7,6 +7,8 @@ import json
 import os
 import zipfile
 import io
+import threading
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -26,8 +28,40 @@ from chat_api import router as chat_router
 # Load environment variables
 load_dotenv()
 
-# Initialize OpenAI client once
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Thread lock for training jobs (prevents race conditions)
+_training_jobs_lock = threading.Lock()
+
+# Initialize OpenAI client with validation
+_openai_api_key = os.getenv("OPENAI_API_KEY")
+if not _openai_api_key:
+    print("[WARNING] OPENAI_API_KEY not set. AI features will use fallback behavior.")
+    openai_client = None
+else:
+    openai_client = OpenAI(api_key=_openai_api_key)
+
+
+def _safe_openai_call(func, fallback_value, error_prefix="OpenAI API"):
+    """
+    Safely execute an OpenAI API call with proper error handling.
+    Returns fallback_value if call fails.
+    """
+    if openai_client is None:
+        print(f"[INFO] {error_prefix}: API key not configured, using fallback")
+        return fallback_value
+    try:
+        return func()
+    except Exception as e:
+        error_msg = str(e)
+        # Provide user-friendly error messages
+        if "api_key" in error_msg.lower() or "authentication" in error_msg.lower():
+            print(f"[ERROR] {error_prefix}: Invalid API key. Please check your OPENAI_API_KEY.")
+        elif "rate_limit" in error_msg.lower() or "quota" in error_msg.lower():
+            print(f"[ERROR] {error_prefix}: Rate limit reached. Please wait and try again.")
+        elif "timeout" in error_msg.lower():
+            print(f"[ERROR] {error_prefix}: Request timed out. The AI service may be slow.")
+        else:
+            print(f"[ERROR] {error_prefix}: {error_msg}")
+        return fallback_value
 
 app = FastAPI(
     title="Damage Lab API",
@@ -365,6 +399,25 @@ async def browse_directory(path: str = None):
         path = str(Path.home())
 
     target_path = Path(path)
+
+    # Security: Resolve to absolute path and check for path traversal
+    try:
+        target_path = target_path.resolve()
+    except (OSError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {path}")
+
+    # Security: Block access to sensitive system directories
+    blocked_paths = [
+        "/etc", "/var", "/usr", "/bin", "/sbin", "/boot", "/root",
+        "/sys", "/proc", "/dev", "/run", "/snap"
+    ]
+    path_str = str(target_path)
+    for blocked in blocked_paths:
+        if path_str == blocked or path_str.startswith(blocked + "/"):
+            raise HTTPException(
+                status_code=403,
+                detail="Access to system directories is not allowed"
+            )
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail=f"Path does not exist: {path}")
@@ -750,21 +803,44 @@ async def get_file_data(label_id: str, filename: str):
         # Read CSV, skipping the first row (classification label)
         df = pd.read_csv(csv_path, skiprows=1)
 
+        # Validate CSV has at least 2 columns
+        if len(df.columns) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV file must have at least 2 columns (time and value). Found {len(df.columns)} column(s)."
+            )
+
         # Get column names (should be Time(s) and Current (pA) or similar)
         time_col = df.columns[0]
         value_col = df.columns[1]  # This will be like "Current (pA)"
 
         data_points = []
         for _, row in df.iterrows():
-            data_points.append(DataPoint(
-                time=float(row[time_col]),
-                value=float(row[value_col])
-            ))
+            try:
+                data_points.append(DataPoint(
+                    time=float(row[time_col]),
+                    value=float(row[value_col])
+                ))
+            except (ValueError, TypeError):
+                # Skip rows with non-numeric data
+                continue
+
+        if not data_points:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid numeric data found in file. Please check the CSV format."
+            )
 
         return FileDataResponse(
             data=data_points,
             yAxisLabel=value_col  # Return the actual column header
         )
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
+    except pd.errors.EmptyDataError:
+        raise HTTPException(status_code=400, detail="The CSV file is empty.")
+    except pd.errors.ParserError as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse CSV file: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
 
@@ -1004,10 +1080,34 @@ async def ingest_data(request: IngestRequest, background_tasks: BackgroundTasks)
     if not folder_path.is_dir():
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.folderPath}")
 
-    # Validate label
-    label = request.classificationLabel.strip()
+    # Validate label - comprehensive checks
+    label = request.classificationLabel.strip() if request.classificationLabel else ""
     if not label:
         raise HTTPException(status_code=400, detail="Classification label cannot be empty")
+
+    # Check label length (filesystem limits)
+    if len(label) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Classification label is too long (max 100 characters)"
+        )
+
+    # Check for invalid characters that could cause filesystem issues
+    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0']
+    for char in invalid_chars:
+        if char in label:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Classification label contains invalid character: '{char}'"
+            )
+
+    # Check if label already exists
+    existing_label_dir = DATABASE_DIR / label
+    if existing_label_dir.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"A dataset with the label '{label}' already exists. Please choose a different name."
+        )
 
     # Run ingestion in background
     background_tasks.add_task(
@@ -1029,15 +1129,21 @@ async def ingest_data(request: IngestRequest, background_tasks: BackgroundTasks)
 @app.post("/api/suggest-label", response_model=SuggestLabelResponse)
 async def suggest_label(request: SuggestLabelRequest):
     """Use GPT to suggest a classification label based on folder path."""
-    import re
-
     folder_path = request.folderPath
     folder_name = Path(folder_path).name
 
-    try:
-        client = openai_client
+    def _generate_fallback_label(name: str) -> str:
+        """Generate a label using simple rules when AI is not available."""
+        label = name
+        label = re.sub(r'^split_data_', '', label)
+        label = re.sub(r'^data_', '', label)
+        label = re.sub(r'[^a-zA-Z0-9_.-]', '_', label)
+        label = re.sub(r'_+', '_', label)
+        label = label.strip('_').lower()
+        return label if label else "dataset"
 
-        response = client.chat.completions.create(
+    def _call_openai():
+        response = openai_client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {
@@ -1063,35 +1169,43 @@ Return ONLY the label, nothing else."""
                     "content": f"Generate a classification label for this folder: {folder_path}"
                 }
             ],
-            temperature=0.3
+            temperature=0.3,
+            timeout=30.0
         )
 
-        suggested_label = response.choices[0].message.content.strip()
+        # Safely extract content from response
+        if not response.choices or len(response.choices) == 0:
+            return None
+        content = response.choices[0].message.content
+        if not content:
+            return None
+        return content.strip()
+
+    # Try OpenAI, fall back to simple extraction
+    suggested_label = _safe_openai_call(
+        _call_openai,
+        fallback_value=None,
+        error_prefix="Label suggestion"
+    )
+
+    if suggested_label:
         # Clean up the label to ensure it matches our format
         suggested_label = re.sub(r'[^a-zA-Z0-9_.-]', '_', suggested_label)
         suggested_label = re.sub(r'_+', '_', suggested_label)  # Remove multiple underscores
         suggested_label = suggested_label.strip('_')  # Remove leading/trailing underscores
 
-        return SuggestLabelResponse(
-            success=True,
-            label=suggested_label
-        )
+        if suggested_label:  # Make sure we still have something after cleanup
+            return SuggestLabelResponse(
+                success=True,
+                label=suggested_label
+            )
 
-    except Exception as e:
-        # Fallback: extract from folder name using simple rules
-        # Remove common prefixes like "split_data_"
-        label = folder_name
-        label = re.sub(r'^split_data_', '', label)
-        label = re.sub(r'^data_', '', label)
-        label = re.sub(r'[^a-zA-Z0-9_.-]', '_', label)
-        label = re.sub(r'_+', '_', label)
-        label = label.strip('_').lower()
-
-        return SuggestLabelResponse(
-            success=True,
-            label=label if label else "dataset",
-            message=f"Used fallback extraction: {str(e)}"
-        )
+    # Fallback: extract from folder name using simple rules
+    return SuggestLabelResponse(
+        success=True,
+        label=_generate_fallback_label(folder_name),
+        message="Used automatic label extraction"
+    )
 
 
 class SuggestModelNameRequest(BaseModel):
@@ -1108,8 +1222,6 @@ class SuggestModelNameResponse(BaseModel):
 @app.post("/api/suggest-model-name", response_model=SuggestModelNameResponse)
 async def suggest_model_name(request: SuggestModelNameRequest):
     """Use GPT to suggest a model name based on labels and architecture."""
-    import re
-
     # Get existing model names to avoid duplicates
     existing_names = set()
     if MODELS_DIR.exists():
@@ -1117,13 +1229,34 @@ async def suggest_model_name(request: SuggestModelNameRequest):
             if model_dir.is_dir() and not model_dir.name.startswith('.'):
                 existing_names.add(model_dir.name.lower())
 
-    try:
-        client = openai_client
+    def _generate_fallback_name() -> str:
+        """Generate a model name using simple rules."""
+        arch_short = request.architecture.lower()[:6] if request.architecture else "model"
+        if request.labels and len(request.labels) > 0:
+            # Safely get first label
+            label_part = request.labels[0][:10].lower() if request.labels[0] else "data"
+            name = f"{arch_short}_{label_part}_model"
+        else:
+            name = f"{arch_short}_model"
 
+        name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        name = re.sub(r'_+', '_', name).strip('_')
+
+        # Ensure name is unique
+        if name in existing_names:
+            counter = 2
+            base_name = name
+            while f"{base_name}_{counter}" in existing_names:
+                counter += 1
+            name = f"{base_name}_{counter}"
+
+        return name
+
+    def _call_openai():
         # Include existing names in the prompt so GPT avoids them
         existing_names_str = ", ".join(sorted(existing_names)) if existing_names else "none"
 
-        response = client.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {
@@ -1151,52 +1284,51 @@ Return ONLY the model name, nothing else."""
                     "content": f"Generate a model name for:\nLabels: {request.labels}\nArchitecture: {request.architecture}"
                 }
             ],
-            temperature=0.3
+            temperature=0.3,
+            timeout=30.0
         )
 
-        suggested_name = response.choices[0].message.content.strip()
+        # Safely extract content
+        if not response.choices or len(response.choices) == 0:
+            return None
+        content = response.choices[0].message.content
+        if not content:
+            return None
+        return content.strip()
+
+    # Try OpenAI first
+    suggested_name = _safe_openai_call(
+        _call_openai,
+        fallback_value=None,
+        error_prefix="Model name suggestion"
+    )
+
+    if suggested_name:
         # Clean up the name
         suggested_name = re.sub(r'[^a-zA-Z0-9_]', '_', suggested_name)
         suggested_name = re.sub(r'_+', '_', suggested_name)
         suggested_name = suggested_name.strip('_').lower()
 
-        # Double-check: if name still exists, append a number
-        if suggested_name in existing_names:
-            counter = 2
-            base_name = suggested_name
-            while f"{base_name}_{counter}" in existing_names:
-                counter += 1
-            suggested_name = f"{base_name}_{counter}"
+        if suggested_name:  # Ensure we still have something
+            # Double-check: if name still exists, append a number
+            if suggested_name in existing_names:
+                counter = 2
+                base_name = suggested_name
+                while f"{base_name}_{counter}" in existing_names:
+                    counter += 1
+                suggested_name = f"{base_name}_{counter}"
 
-        return SuggestModelNameResponse(
-            success=True,
-            name=suggested_name
-        )
+            return SuggestModelNameResponse(
+                success=True,
+                name=suggested_name
+            )
 
-    except Exception as e:
-        # Fallback: generate simple name
-        arch_short = request.architecture.lower()[:6]
-        if request.labels:
-            label_part = request.labels[0][:10].lower()
-            name = f"{arch_short}_{label_part}_model"
-        else:
-            name = f"{arch_short}_model"
-
-        name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-
-        # Ensure fallback name is also unique
-        if name in existing_names:
-            counter = 2
-            base_name = name
-            while f"{base_name}_{counter}" in existing_names:
-                counter += 1
-            name = f"{base_name}_{counter}"
-
-        return SuggestModelNameResponse(
-            success=True,
-            name=name,
-            message=f"Used fallback: {str(e)}"
-        )
+    # Fallback
+    return SuggestModelNameResponse(
+        success=True,
+        name=_generate_fallback_name(),
+        message="Used automatic name generation"
+    )
 
 
 # ============ Training API Models ============
@@ -1336,45 +1468,80 @@ async def clear_training_state():
 
 
 def _load_training_jobs() -> dict[str, dict]:
-    """Load training jobs from disk."""
-    if TRAINING_JOBS_FILE.exists():
-        try:
-            with open(TRAINING_JOBS_FILE) as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+    """Load training jobs from disk (thread-safe)."""
+    with _training_jobs_lock:
+        if TRAINING_JOBS_FILE.exists():
+            try:
+                with open(TRAINING_JOBS_FILE) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"[WARNING] Could not load training jobs: {e}")
+                return {}
+        return {}
 
 def _save_training_jobs(jobs: dict[str, dict]):
-    """Save training jobs to disk."""
-    with open(TRAINING_JOBS_FILE, "w") as f:
-        json.dump(jobs, f, indent=2)
+    """Save training jobs to disk (thread-safe)."""
+    with _training_jobs_lock:
+        try:
+            with open(TRAINING_JOBS_FILE, "w") as f:
+                json.dump(jobs, f, indent=2)
+        except IOError as e:
+            print(f"[ERROR] Could not save training jobs: {e}")
+
+# Track which jobs should be stopped
+_stop_requested: dict[str, bool] = {}
 
 training_jobs: dict[str, dict] = _load_training_jobs()
 
 
 def run_training_job(job_id: str, model_name: str, labels: list[str], architecture: str, generate_report: bool, use_llm: bool):
     """Background task to run training."""
-    import threading
     import tensorflow as tf
     from training import run_training, DataConfig
     from training.config import CNNConfig, ResNetConfig
 
     def update_job(updates: dict):
-        """Update job status and persist to disk."""
-        training_jobs[job_id].update(updates)
+        """Update job status and persist to disk (thread-safe)."""
+        with _training_jobs_lock:
+            if job_id in training_jobs:
+                training_jobs[job_id].update(updates)
         _save_training_jobs(training_jobs)
 
-    # Create epoch progress callback
-    class EpochProgressCallback(tf.keras.callbacks.Callback):
-        """Callback to report epoch progress to the API."""
+    def is_stop_requested() -> bool:
+        """Check if this job should be stopped."""
+        return _stop_requested.get(job_id, False)
 
-        def __init__(self, total_epochs: int, update_fn):
+    def cleanup_gpu():
+        """Clean up GPU memory after training."""
+        try:
+            tf.keras.backend.clear_session()
+            # Force garbage collection
+            import gc
+            gc.collect()
+        except Exception as e:
+            print(f"[WARNING] GPU cleanup error (non-fatal): {e}")
+
+    # Create epoch progress callback with stop checking
+    class EpochProgressCallback(tf.keras.callbacks.Callback):
+        """Callback to report epoch progress and check for stop requests."""
+
+        def __init__(self, total_epochs: int, update_fn, stop_check_fn):
             super().__init__()
             self.total_epochs = total_epochs
             self.update_fn = update_fn
+            self.stop_check_fn = stop_check_fn
 
         def on_epoch_begin(self, epoch, logs=None):
+            # Check if stop was requested
+            if self.stop_check_fn():
+                self.model.stop_training = True
+                self.update_fn({
+                    "status": "error",
+                    "error_message": "Training stopped by user",
+                    "progress_message": "Training stopped"
+                })
+                return
+
             self.update_fn({
                 "current_epoch": epoch + 1,
                 "total_epochs": self.total_epochs,
@@ -1388,6 +1555,10 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
                 "current_epoch": epoch + 1,
                 "progress_message": f"Epoch {epoch + 1}/{self.total_epochs} - Acc: {acc:.3f}, Val Acc: {val_acc:.3f}"
             })
+
+            # Check for stop request after each epoch
+            if self.stop_check_fn():
+                self.model.stop_training = True
 
     try:
         # Update status: preparing
@@ -1430,8 +1601,8 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
             "progress_message": "Building model..."
         })
 
-        # Create epoch progress callback
-        epoch_callback = EpochProgressCallback(total_epochs, update_job)
+        # Create epoch progress callback with stop checking
+        epoch_callback = EpochProgressCallback(total_epochs, update_job, is_stop_requested)
 
         # Update status: training
         update_job({
@@ -1494,52 +1665,128 @@ def run_training_job(job_id: str, model_name: str, labels: list[str], architectu
             json.dump(model_metadata, f, indent=2)
 
     except Exception as e:
+        error_msg = str(e)
+        # Provide user-friendly error messages
+        if "out of memory" in error_msg.lower() or "oom" in error_msg.lower():
+            user_msg = "Training failed: Not enough GPU memory. Try using fewer datasets or a smaller model."
+        elif "no data found" in error_msg.lower():
+            user_msg = "Training failed: No data found for the selected datasets. Please check your data."
+        elif "cuda" in error_msg.lower() or "gpu" in error_msg.lower():
+            user_msg = "Training failed: GPU error. The system may need to be restarted."
+        elif "permission" in error_msg.lower():
+            user_msg = "Training failed: Cannot save files. Check disk permissions."
+        else:
+            user_msg = f"Training failed: {error_msg}"
+
         update_job({
             "status": "error",
-            "error_message": str(e),
-            "progress_message": f"Error: {str(e)}"
+            "error_message": user_msg,
+            "progress_message": user_msg
         })
+    finally:
+        # Always clean up GPU memory and stop tracking
+        cleanup_gpu()
+        # Remove from stop tracking
+        _stop_requested.pop(job_id, None)
 
 
 @app.post("/api/training/start")
 async def start_training(request: TrainingRequest, background_tasks: BackgroundTasks):
     """Start a new training job."""
     import uuid
-    import threading
 
-    # Validate labels exist
+    # Validate request has labels
+    if not request.labels or len(request.labels) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select at least one dataset to train on"
+        )
+
+    # Need at least 2 labels for classification
+    if len(request.labels) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select at least 2 different datasets to train a classifier"
+        )
+
+    # Validate model name
+    model_name = request.model_name.strip() if request.model_name else ""
+    if not model_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a name for your model"
+        )
+
+    # Check model name length
+    if len(model_name) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Model name is too long (max 100 characters)"
+        )
+
+    # Check for invalid characters in model name
+    if not re.match(r'^[a-zA-Z0-9_-]+$', model_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Model name can only contain letters, numbers, underscores, and hyphens"
+        )
+
+    # Check if model already exists
+    if (MODELS_DIR / model_name).exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"A model named '{model_name}' already exists. Please choose a different name."
+        )
+
+    # Validate architecture
+    if request.architecture not in ["CNN", "ResNet"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Architecture must be 'CNN' or 'ResNet'"
+        )
+
+    # Validate labels exist and have data
     for label in request.labels:
         label_dir = DATABASE_DIR / label
         if not label_dir.exists():
-            raise HTTPException(status_code=400, detail=f"Label '{label}' not found")
+            raise HTTPException(status_code=400, detail=f"Dataset '{label}' not found")
+
+        # Check if label directory has CSV files
+        csv_files = list(label_dir.glob("*.csv"))
+        if not csv_files:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dataset '{label}' has no data files. Please add data first."
+            )
 
     # Create job
     job_id = str(uuid.uuid4())[:8]
-    training_jobs[job_id] = {
-        "job_id": job_id,
-        "model_name": request.model_name,
-        "labels": request.labels,
-        "architecture": request.architecture,
-        "status": "pending",
-        "current_step": 0,
-        "current_epoch": None,
-        "total_epochs": 50,
-        "progress_message": "Initializing...",
-        "error_message": None,
-        "result": None,
-        "created_at": datetime.now().isoformat(),
-    }
+    with _training_jobs_lock:
+        training_jobs[job_id] = {
+            "job_id": job_id,
+            "model_name": model_name,  # Use validated model_name
+            "labels": request.labels,
+            "architecture": request.architecture,
+            "status": "pending",
+            "current_step": 0,
+            "current_epoch": None,
+            "total_epochs": 50,
+            "progress_message": "Initializing...",
+            "error_message": None,
+            "result": None,
+            "created_at": datetime.now().isoformat(),
+        }
     _save_training_jobs(training_jobs)
 
     # Start training in background thread (not FastAPI background task for long-running)
     thread = threading.Thread(
         target=run_training_job,
-        args=(job_id, request.model_name, request.labels, request.architecture, request.generate_report, request.use_llm),
+        args=(job_id, model_name, request.labels, request.architecture, request.generate_report, request.use_llm),
         daemon=True
     )
     thread.start()
 
-    return {"job_id": job_id, "message": f"Training started for model '{request.model_name}'"}
+    return {"job_id": job_id, "message": f"Training started for model '{model_name}'"}
 
 
 @app.get("/api/training/status/{job_id}", response_model=TrainingStatusResponse)
@@ -1554,15 +1801,31 @@ async def get_training_status(job_id: str):
 
 @app.post("/api/training/stop/{job_id}")
 async def stop_training(job_id: str):
-    """Stop a training job (if possible)."""
+    """Stop a training job. The training will stop after the current epoch completes."""
     if job_id not in training_jobs:
         raise HTTPException(status_code=404, detail=f"Training job '{job_id}' not found")
 
-    # Mark as stopped (actual interruption requires more complex handling)
-    training_jobs[job_id]["status"] = "error"
-    training_jobs[job_id]["error_message"] = "Training stopped by user"
+    job_status = training_jobs[job_id].get("status", "")
 
-    return {"message": "Training stop requested"}
+    # Can only stop jobs that are actually running
+    if job_status not in ["pending", "preparing", "building", "training"]:
+        return {
+            "success": False,
+            "message": f"Cannot stop job - it is already {job_status}"
+        }
+
+    # Request stop - the training callback will check this flag
+    _stop_requested[job_id] = True
+
+    # Update job status
+    with _training_jobs_lock:
+        training_jobs[job_id]["progress_message"] = "Stop requested - finishing current epoch..."
+    _save_training_jobs(training_jobs)
+
+    return {
+        "success": True,
+        "message": "Stop requested. Training will stop after the current epoch completes."
+    }
 
 
 def _detect_model_architecture(model_dir: Path) -> str:

@@ -145,7 +145,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            Training Settings
+            Settings
           </DialogTitle>
         </DialogHeader>
 
