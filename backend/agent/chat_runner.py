@@ -197,7 +197,7 @@ def execute_tool(name: str, arguments: dict) -> str:
 
 
 class DamageLabChat:
-    """Interactive chat interface for Damage Lab."""
+    """Interactive chat interface for Aryan Senthil's app."""
     
     def __init__(self):
         self.client = OpenAI()
@@ -308,7 +308,7 @@ def main():
     # Check API status
     status = get_system_status()
     if status["status"] == "success":
-        print(f"Connected to Damage Lab API at {status['api_url']}")
+        print(f"Connected to Aryan Senthil's API at {status['api_url']}")
     else:
         print(f"Warning: Could not connect to API")
         print(f"  Error: {status.get('error_message', 'Unknown')}")

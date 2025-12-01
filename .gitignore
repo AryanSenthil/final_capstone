@@ -32,6 +32,10 @@ backend/test_database/metadata/*
 backend/test_uploads/*
 !backend/test_uploads/.gitkeep
 
+# Chat sessions (keep structure, ignore session data)
+backend/chat_sessions/*
+!backend/chat_sessions/.gitkeep
+
 # Environment files (secrets)
 .env
 .env.*

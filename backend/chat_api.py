@@ -1,6 +1,6 @@
 """
-Chat API Router for Damage Lab
-==============================
+Chat API Router for Aryan Senthil's App
+=======================================
 Exposes the chat agent through REST API endpoints with streaming support.
 """
 
