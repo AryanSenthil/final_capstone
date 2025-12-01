@@ -1,5 +1,7 @@
-# Carbon Fiber Sensor Data Management Interface
+# Carbon Fiber Sensor Data Management App
 
+> **Aryan Senthil's Final Capstone Project**
+>
 > Advanced AI-powered platform for carbon fiber composite damage detection and analysis
 
 <div align="center">

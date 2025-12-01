@@ -1,13 +1,28 @@
 # Dev Server Instructions
 
-When asked to "run dev" or start development, ALWAYS start BOTH servers in parallel (background mode):
+## Quick Start (Recommended)
 
-## Backend (FastAPI) - Port 8000
+Use the dev script to start both servers automatically:
+```bash
+./dev.sh
+```
+
+This script will:
+- Kill any processes on ports 8000 and 5000
+- Start backend (FastAPI) on port 8000
+- Start frontend (Express + Vite) on port 5000
+- Display logs from both servers
+
+## Manual Start (Alternative)
+
+When asked to "run dev" or start development, you can manually start BOTH servers in parallel (background mode):
+
+### Backend (FastAPI) - Port 8000
 ```bash
 cd /home/ari/Documents/final_capstone/backend && .venv/bin/uvicorn api:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Frontend (Express + Vite) - Port 5000
+### Frontend (Express + Vite) - Port 5000
 ```bash
 cd /home/ari/Documents/final_capstone/frontend && npm run dev
 ```
@@ -16,6 +31,7 @@ cd /home/ari/Documents/final_capstone/frontend && npm run dev
 - Backend MUST use the virtual environment (`.venv/bin/uvicorn`) - do NOT use system uvicorn
 - Frontend proxies `/api/*` requests to backend on port 8000
 - Both servers must be running for the app to work
+- Always prefer using `./dev.sh` for starting servers
 
 ## Debugging: Common Issues
 
