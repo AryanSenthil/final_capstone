@@ -210,16 +210,16 @@ export default function RawDatabasePage() {
                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/5 transition-colors"
                 onClick={() => toggleFolder(folder.id)}
               >
-                <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="flex items-center gap-4 min-w-0">
                   <div className={cn(
-                    "h-10 w-10 rounded-md flex items-center justify-center transition-colors",
+                    "h-10 w-10 rounded-md flex items-center justify-center transition-colors shrink-0",
                     expandedFolders[folder.id] ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                   )}>
                     <Folder className="h-5 w-5" />
                   </div>
 
                   <div className="space-y-1 min-w-0">
-                    <h3 className="text-base font-semibold font-mono truncate text-primary">{folder.name}</h3>
+                    <h3 className="text-base font-semibold font-mono truncate text-primary">{folder.id}</h3>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <FileText className="h-3 w-3" /> {folder.fileCount} files
@@ -227,14 +227,19 @@ export default function RawDatabasePage() {
                       <span className="flex items-center gap-1">
                         <HardDrive className="h-3 w-3" /> {folder.size}
                       </span>
-                      <span className="flex items-center gap-1 hidden sm:flex">
-                        <Calendar className="h-3 w-3" /> {folder.date}
-                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center text-muted-foreground">
+                {/* Time - Centered */}
+                <div className="flex-1 flex justify-center">
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>{folder.metadata.importedAt}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center text-muted-foreground shrink-0">
                    {expandedFolders[folder.id] ? (
                       <ChevronUp className="h-5 w-5" />
                     ) : (

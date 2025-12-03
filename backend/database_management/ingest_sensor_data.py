@@ -236,9 +236,14 @@ def ingest_sensor_data(
     for csv_file in csv_files:
         try:
             df = pd.read_csv(csv_file, skiprows=skip_rows, header=None)
-            time = df.iloc[:, time_column].values
-            values = df.iloc[:, values_column].values
-            
+            time = pd.to_numeric(df.iloc[:, time_column], errors='coerce').values
+            values = pd.to_numeric(df.iloc[:, values_column], errors='coerce').values
+
+            # Remove NaN values from coercion
+            valid_mask = ~(np.isnan(time) | np.isnan(values))
+            time = time[valid_mask]
+            values = values[valid_mask]
+
             if len(time) < MIN_DATA_POINTS:
                 print(f"{LOG_FORMAT_SKIP} {csv_file.name}: insufficient data points")
                 continue

@@ -232,8 +232,8 @@ def generate_database_metadata(
     sample_file = csv_files[0]
     df = pd.read_csv(sample_file, skiprows=skip_rows, header=None)
 
-    time = df.iloc[:, time_column].values
-    values = df.iloc[:, values_column].values
+    time = pd.to_numeric(df.iloc[:, time_column], errors='coerce').values
+    values = pd.to_numeric(df.iloc[:, values_column], errors='coerce').values
 
     # Calculate folder size
     folder_size_bytes = sum(f.stat().st_size for f in database_label_dir.glob("*.csv"))
