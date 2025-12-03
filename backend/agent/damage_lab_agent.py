@@ -203,58 +203,79 @@ def get_dataset_details(label_id: str) -> dict:
         return {"status": "error", "error_message": str(e)}
 
 
-def browse_directories(path: Optional[str] = None) -> dict:
+def list_available_data() -> dict:
     """
-    Browse directories on the server to find folders containing raw sensor data.
-
-    Args:
-        path: Directory path to browse. If None, starts at user's home directory.
+    List all data that has been uploaded to the server and is available for use.
 
     Returns:
-        dict: List of files/folders with their paths and whether they are directories.
+        dict: Contains:
+            - raw_database: List of folders in raw_database (unprocessed uploads)
+            - processed_labels: List of processed labels in database (ready for training)
+            - test_uploads: List of CSV files uploaded for testing
+            - models: List of trained models available for inference
 
-    Use this to navigate the file system and locate raw data folders for ingestion.
+    Use this to see what data the user has already uploaded and is available for
+    training, testing, or other operations. Users upload data through the web
+    interface, and this function shows what's on the server.
     """
     try:
-        if not path:
-            path = str(Path.home())
+        base_dir = Path(__file__).parent.parent
 
-        target_path = Path(path)
-
-        if not target_path.exists():
-            return {"status": "error", "error_message": f"Path does not exist: {path}"}
-
-        if not target_path.is_dir():
-            return {"status": "error", "error_message": f"Path is not a directory: {path}"}
-
-        items = []
-
-        # Add parent directory option
-        if target_path.parent != target_path:
-            items.append({
-                "name": "..",
-                "path": str(target_path.parent),
-                "is_directory": True
-            })
-
-        for item in sorted(target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-            # Skip hidden files/folders
-            if item.name.startswith('.'):
-                continue
-            items.append({
-                "name": item.name,
-                "path": str(item),
-                "is_directory": item.is_dir()
-            })
-
-        return {
+        result = {
             "status": "success",
-            "current_path": path,
-            "items": items
+            "raw_database": [],
+            "processed_labels": [],
+            "test_uploads": [],
+            "models": []
         }
 
-    except PermissionError:
-        return {"status": "error", "error_message": f"Permission denied: {path}"}
+        # List raw_database folders (unprocessed uploads)
+        raw_db_dir = base_dir / "raw_database"
+        if raw_db_dir.exists():
+            for folder in sorted(raw_db_dir.iterdir()):
+                if folder.is_dir() and not folder.name.startswith('.'):
+                    csv_count = len(list(folder.glob("*.csv")))
+                    result["raw_database"].append({
+                        "name": folder.name,
+                        "path": str(folder),
+                        "csv_files": csv_count
+                    })
+
+        # List processed labels (ready for training)
+        db_dir = base_dir / "database"
+        if db_dir.exists():
+            for label_dir in sorted(db_dir.iterdir()):
+                if label_dir.is_dir() and not label_dir.name.startswith('.'):
+                    metadata_file = label_dir / "metadata.json"
+                    chunk_count = len(list(label_dir.glob("chunk_*.csv")))
+                    result["processed_labels"].append({
+                        "label": label_dir.name,
+                        "path": str(label_dir),
+                        "chunks": chunk_count,
+                        "has_metadata": metadata_file.exists()
+                    })
+
+        # List test uploads
+        test_dir = base_dir / "test_uploads"
+        if test_dir.exists():
+            for csv_file in sorted(test_dir.glob("*.csv")):
+                result["test_uploads"].append({
+                    "name": csv_file.name,
+                    "path": str(csv_file)
+                })
+
+        # List trained models
+        models_dir = base_dir / "models"
+        if models_dir.exists():
+            for model_dir in sorted(models_dir.iterdir()):
+                if model_dir.is_dir() and not model_dir.name.startswith('.'):
+                    result["models"].append({
+                        "id": model_dir.name,
+                        "path": str(model_dir)
+                    })
+
+        return result
+
     except Exception as e:
         return {"status": "error", "error_message": str(e)}
 
@@ -1452,7 +1473,7 @@ def get_workflow_guidance(workflow: str) -> dict:
         "data_ingestion": {
             "title": "Data Ingestion Workflow",
             "steps": [
-                "1. Browse to find your data folder with browse_directories(path)",
+                "1. Check what data is already uploaded with list_available_data()",
                 "2. Get a suggested label with suggest_label(folder_path)",
                 "3. Start ingestion with ingest_data(folder_path, label)",
                 "4. Wait for processing (runs synchronously)",
@@ -2251,7 +2272,7 @@ ALL_TOOLS = [
     # Data Management
     list_datasets,
     get_dataset_details,
-    browse_directories,
+    list_available_data,
     suggest_label,
     ingest_data,
     delete_dataset,

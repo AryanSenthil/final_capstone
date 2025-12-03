@@ -11,7 +11,7 @@ from .damage_lab_agent import (
     # Data Management
     list_datasets,
     get_dataset_details,
-    browse_directories,
+    list_available_data,
     suggest_label,
     ingest_data,
     delete_dataset,
@@ -56,7 +56,7 @@ __all__ = [
     "ALL_TOOLS",
     "list_datasets",
     "get_dataset_details",
-    "browse_directories",
+    "list_available_data",
     "suggest_label",
     "ingest_data",
     "delete_dataset",

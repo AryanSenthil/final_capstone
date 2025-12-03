@@ -5,33 +5,35 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: capstone-backend
+    container_name: damagelab-backend
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
       # Persist data directories
-      - ./backend/database:/app/database
-      - ./backend/raw_database:/app/raw_database
-      - ./backend/models:/app/models
-      - ./backend/chat_sessions:/app/chat_sessions
-      - ./backend/training_persistence:/app/training_persistence
-      # Persist .env file for API key storage
-      - ./backend/.env:/app/.env
+      - backend-database:/app/database
+      - backend-raw-database:/app/raw_database
+      - backend-models:/app/models
+      - backend-chat-sessions:/app/chat_sessions
+      - backend-training:/app/training_persistence
+      - backend-test-db:/app/test_database
+      - backend-test-uploads:/app/test_uploads
+      # Mount .env file for API key (create if doesn't exist)
+      - ./backend/.env:/app/.env:rw
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/labels')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: capstone-frontend
+    container_name: damagelab-frontend
     ports:
       - "5000:5000"
     environment:
@@ -42,13 +44,22 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
+      start_period: 10s
     restart: unless-stopped
+
+volumes:
+  backend-database:
+  backend-raw-database:
+  backend-models:
+  backend-chat-sessions:
+  backend-training:
+  backend-test-db:
+  backend-test-uploads:
 
 networks:
   default:
-    name: capstone-network
+    name: damagelab-network

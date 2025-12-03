@@ -22,7 +22,7 @@ from damage_lab_agent import (
     # Data Management
     list_datasets,
     get_dataset_details,
-    browse_directories,
+    list_available_data,
     suggest_label,
     ingest_data,
     delete_dataset,
@@ -69,7 +69,7 @@ TOOL_FUNCTIONS: dict[str, Callable] = {
     # Data Management
     "list_datasets": list_datasets,
     "get_dataset_details": get_dataset_details,
-    "browse_directories": browse_directories,
+    "list_available_data": list_available_data,
     "suggest_label": suggest_label,
     "ingest_data": ingest_data,
     "delete_dataset": delete_dataset,

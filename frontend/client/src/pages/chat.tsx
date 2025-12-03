@@ -33,6 +33,9 @@ import {
   ChevronLeft,
   Image as ImageIcon,
   ZoomIn,
+  Upload,
+  HardDrive,
+  File,
 } from "lucide-react";
 import {
   Dialog,
@@ -512,204 +515,300 @@ function ReportViewerModal({
   );
 }
 
-// File Browser Dialog for Attachments - Select files or folders to reference
-function FileBrowserDialog({
+// File Upload Dialog for Attachments - Upload files from client computer
+function FileUploadDialog({
   open,
   onClose,
-  onSelectFile,
-  onSelectFolder,
+  onFilesUploaded,
 }: {
   open: boolean;
   onClose: () => void;
-  onSelectFile: (path: string, name: string) => void;
-  onSelectFolder?: (path: string, name: string) => void;
+  onFilesUploaded: (files: Array<{ path: string; name: string; type: 'test' | 'data' }>) => void;
 }) {
-  const [currentPath, setCurrentPath] = useState("");
-  const [items, setItems] = useState<DirectoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadType, setUploadType] = useState<'test' | 'data'>('test');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  const fetchDirectory = async (path: string) => {
-    setLoading(true);
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+    if (files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...files]);
+    }
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+      setSelectedFiles(prev => [...prev, ...files]);
+      e.target.value = '';
+    }
+  }, []);
+
+  const removeFile = useCallback((index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleUpload = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const uploadedFiles: Array<{ path: string; name: string; type: 'test' | 'data' }> = [];
+
     try {
-      const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
-      const res = await fetch(url);
-      const data = await res.json();
-      // API returns array directly
-      if (Array.isArray(data)) {
-        setItems(data);
-        setCurrentPath(path);
+      if (uploadType === 'test') {
+        // Upload each file individually for testing
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const response = await fetch('/api/tests/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (response.ok && result.success) {
+            uploadedFiles.push({
+              path: result.file_path,
+              name: file.name,
+              type: 'test'
+            });
+          } else {
+            throw new Error(result.detail || `Failed to upload ${file.name}`);
+          }
+
+          setUploadProgress(((i + 1) / selectedFiles.length) * 100);
+        }
+      } else {
+        // Upload all files to raw_database as a batch
+        const formData = new FormData();
+        selectedFiles.forEach(file => formData.append('files', file));
+
+        const response = await fetch('/api/raw-database/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          // Add each uploaded file
+          selectedFiles.forEach(file => {
+            uploadedFiles.push({
+              path: result.folder_path,
+              name: file.name,
+              type: 'data'
+            });
+          });
+        } else {
+          throw new Error(result.detail || 'Failed to upload files');
+        }
+
+        setUploadProgress(100);
       }
+
+      toast({
+        title: "Files Uploaded",
+        description: `Successfully uploaded ${uploadedFiles.length} file(s)`,
+      });
+
+      onFilesUploaded(uploadedFiles);
+      setSelectedFiles([]);
+      onClose();
+
     } catch (error) {
-      console.error("Failed to browse directory:", error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload files",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
-  // Only fetch when dialog opens, not on every render
-  useEffect(() => {
-    if (open && items.length === 0) {
-      fetchDirectory("");
+  const handleClose = () => {
+    if (!isUploading) {
+      setSelectedFiles([]);
+      onClose();
     }
-  }, [open]);
-
-  const handleNavigate = (path: string) => {
-    fetchDirectory(path);
   };
-
-  const handleGoHome = () => {
-    fetchDirectory("");
-  };
-
-  const handleGoUp = () => {
-    const parentPath = currentPath.split("/").slice(0, -1).join("/") || "";
-    fetchDirectory(parentPath);
-  };
-
-  const directories = items.filter((item) => item.isDirectory && item.name !== "..");
-  const files = items.filter((item) => !item.isDirectory);
-
-  // Get current folder name for display
-  const currentFolderName = currentPath ? currentPath.split("/").pop() || "folder" : "Home";
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[85vh] p-0 overflow-hidden flex flex-col">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[85vh] p-0 overflow-hidden flex flex-col">
         <DialogHeader className="p-4 pb-3 border-b border-border shrink-0">
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-            <FolderOpen className="h-5 w-5 text-blue-500" />
-            Select File or Folder to Reference
+            <Upload className="h-5 w-5 text-blue-500" />
+            Upload Files from Your Computer
           </DialogTitle>
         </DialogHeader>
 
-        {/* Navigation */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGoHome}
-            title="Go to home directory"
-            className="h-9 px-2.5 hover:scale-105 active:scale-95 transition-all"
-          >
-            <Home className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGoUp}
-            disabled={!currentPath}
-            title="Go to parent directory"
-            className="h-9 px-2.5 hover:scale-105 active:scale-95 transition-all"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-background rounded-lg border text-sm font-mono overflow-hidden">
-            <Folder className="h-4 w-4 text-blue-500 shrink-0" />
-            <span className="truncate">{currentPath || "~ (Home)"}</span>
+        <div className="p-4 space-y-4 flex-1 overflow-auto">
+          {/* Upload Type Selection */}
+          <div className="flex gap-2">
+            <Button
+              variant={uploadType === 'test' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setUploadType('test')}
+              className="flex-1"
+            >
+              <PlayCircle className="h-4 w-4 mr-2" />
+              For Testing/Inference
+            </Button>
+            <Button
+              variant={uploadType === 'data' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setUploadType('data')}
+              className="flex-1"
+            >
+              <Database className="h-4 w-4 mr-2" />
+              For Data Import
+            </Button>
           </div>
-        </div>
 
-        {/* Directory listing */}
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-[500px]">
-            {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="p-3 space-y-1">
-                {/* Parent directory link */}
-                {currentPath && (
-                  <div
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer hover:bg-muted transition-colors text-muted-foreground"
-                    onClick={handleGoUp}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    <span className="flex-1 text-sm italic">Go up one level</span>
-                  </div>
-                )}
+          <p className="text-xs text-muted-foreground">
+            {uploadType === 'test'
+              ? "Upload CSV files to run inference/testing with a trained model"
+              : "Upload CSV files to add to the raw database for processing"
+            }
+          </p>
 
-                {/* Folders */}
-                {directories.map((item) => (
-                  <div
-                    key={item.path}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
-                    onClick={() => handleNavigate(item.path)}
-                  >
-                    <Folder className="h-5 w-5 text-blue-500 shrink-0" />
-                    <span className="flex-1 text-sm truncate font-medium">{item.name}</span>
-                    {onSelectFolder && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectFolder(item.path, item.name);
-                          onClose();
-                        }}
-                        className="h-8 px-3 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950"
-                      >
-                        <Folder className="h-3 w-3 mr-1.5" />
-                        Select Folder
-                      </Button>
-                    )}
-                  </div>
-                ))}
-
-                {/* Files */}
-                {files.map((item) => (
-                  <div
-                    key={item.path}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted transition-colors group"
-                  >
-                    <FileText className="h-5 w-5 text-slate-400 shrink-0" />
-                    <span className="flex-1 text-sm truncate">{item.name}</span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        onSelectFile(item.path, item.name);
-                        onClose();
-                      }}
-                      className="h-8 px-3 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all"
-                    >
-                      <FileText className="h-3 w-3 mr-1.5" />
-                      Select File
-                    </Button>
-                  </div>
-                ))}
-
-                {directories.length === 0 && files.length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground text-sm">
-                    This directory is empty
-                  </div>
-                )}
-              </div>
+          {/* Drop Zone */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              "border-2 border-dashed rounded-lg p-8 transition-all cursor-pointer",
+              isDragging && "border-primary bg-primary/5 scale-[1.02]",
+              !isDragging && "border-muted-foreground/25 hover:border-primary hover:bg-muted/50"
             )}
-          </ScrollArea>
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className={cn(
+                "rounded-full p-4",
+                isDragging ? "bg-primary/10" : "bg-muted"
+              )}>
+                <Upload className={cn(
+                  "h-8 w-8",
+                  isDragging ? "text-primary" : "text-muted-foreground"
+                )} />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">
+                  {isDragging ? "Drop files here" : "Click to browse or drag files here"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  CSV files only
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Selected Files */}
+          {selectedFiles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{selectedFiles.length} file(s) selected</p>
+              <ScrollArea className={cn("border rounded-lg", selectedFiles.length > 4 ? "h-40" : "")}>
+                <div className="p-2 space-y-1">
+                  {selectedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm bg-muted/50"
+                    >
+                      <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeFile(idx)}
+                        disabled={isUploading}
+                        className="h-6 w-6"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+
+          {/* Upload Progress */}
+          {isUploading && (
+            <div className="space-y-2">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-center text-muted-foreground">
+                Uploading... {Math.round(uploadProgress)}%
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Footer with Select Current Folder button */}
+        {/* Footer */}
         <div className="p-4 border-t border-border bg-muted/20 shrink-0 flex items-center justify-between gap-3">
           <Button
             variant="outline"
-            onClick={onClose}
-            className="hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+            onClick={handleClose}
+            disabled={isUploading}
           >
             Cancel
           </Button>
-          {currentPath && onSelectFolder && (
-            <Button
-              onClick={() => {
-                onSelectFolder(currentPath, currentFolderName);
-                onClose();
-              }}
-              className="hover:shadow-md hover:scale-105 active:scale-95 transition-all"
-            >
-              <Folder className="h-4 w-4 mr-2" />
-              Select Current Folder
-            </Button>
-          )}
+          <Button
+            onClick={handleUpload}
+            disabled={selectedFiles.length === 0 || isUploading}
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Upload {selectedFiles.length > 0 ? `${selectedFiles.length} File(s)` : 'Files'}
+              </>
+            )}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -1267,13 +1366,14 @@ export default function ChatPage() {
     return title.length > 35 ? title.slice(0, 35) + "..." : title;
   };
 
-  // Attachment handlers
-  const handleAddFile = (path: string, name: string) => {
-    setPendingAttachments((prev) => [...prev, { type: "file", path, name }]);
-  };
-
-  const handleAddFolder = (path: string, name: string) => {
-    setPendingAttachments((prev) => [...prev, { type: "folder", path, name }]);
+  // Attachment handler for uploaded files
+  const handleFilesUploaded = (files: Array<{ path: string; name: string; type: 'test' | 'data' }>) => {
+    const newAttachments: Attachment[] = files.map(f => ({
+      type: f.type === 'data' ? 'folder' as const : 'file' as const,
+      path: f.path,
+      name: f.name
+    }));
+    setPendingAttachments((prev) => [...prev, ...newAttachments]);
   };
 
   const handleRemoveAttachment = (index: number) => {
@@ -1425,12 +1525,11 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* File Browser Dialog */}
-      <FileBrowserDialog
+      {/* File Upload Dialog */}
+      <FileUploadDialog
         open={showFileBrowser}
         onClose={() => setShowFileBrowser(false)}
-        onSelectFile={handleAddFile}
-        onSelectFolder={handleAddFolder}
+        onFilesUploaded={handleFilesUploaded}
       />
 
       {/* Image Expand Modal */}

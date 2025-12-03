@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-dev \
     pkg-config \
     graphviz \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for fast package management

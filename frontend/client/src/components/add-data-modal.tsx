@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Dialog,
@@ -25,113 +25,133 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { FolderOpen, Plus, Loader2, Folder, FileText, ChevronUp, Check, Database, Wand2, ChevronLeft, Home } from "lucide-react";
+import { Upload, Plus, Loader2, FileText, X, Database, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
-  folderPath: z.string().min(1, "Please select a folder"),
+  folderName: z.string().optional(),
   label: z.string().min(1, "Label is required").regex(/^[a-zA-Z0-9_.-]+$/, "Alphanumeric, dots, dashes, and underscores only"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface DirectoryItem {
-  name: string;
-  path: string;
-  isDirectory: boolean;
+interface SelectedFile {
+  file: File;
+  id: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 export function AddDataModal() {
   const [open, setOpen] = useState(false);
-  const [showBrowser, setShowBrowser] = useState(false);
-  const [currentPath, setCurrentPath] = useState<string>("");
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState("");
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [uploadedFolderPath, setUploadedFolderPath] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      folderPath: "",
+      folderName: "",
       label: "",
     },
   });
 
-  // Fetch directory contents
-  const { data: dirContents, isLoading: dirLoading } = useQuery<DirectoryItem[]>({
-    queryKey: ["/api/browse", currentPath ? `?path=${encodeURIComponent(currentPath)}` : ""],
-    enabled: showBrowser,
-  });
+  const addFiles = useCallback((newFiles: FileList | File[]) => {
+    const filesArray = Array.from(newFiles);
+    const validFiles: SelectedFile[] = [];
 
-  // Cleanup progress interval on unmount
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
+    for (const file of filesArray) {
+      // Only accept CSV files
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        toast({
+          title: "Invalid File Type",
+          description: `${file.name} is not a CSV file`,
+          variant: "destructive",
+        });
+        continue;
       }
-    };
+
+      // Check for duplicates
+      const isDuplicate = selectedFiles.some(sf => sf.file.name === file.name && sf.file.size === file.size);
+      if (isDuplicate) {
+        continue;
+      }
+
+      validFiles.push({
+        file,
+        id: `${file.name}-${Date.now()}-${Math.random()}`,
+      });
+    }
+
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+    }
+  }, [selectedFiles, toast]);
+
+  const removeFile = useCallback((id: string) => {
+    setSelectedFiles(prev => prev.filter(sf => sf.id !== id));
   }, []);
 
-  const startProgressSimulation = () => {
-    setIsProcessing(true);
-    setProgress(0);
-    setProcessingStage("Copying raw data...");
+  const clearFiles = useCallback(() => {
+    setSelectedFiles([]);
+  }, []);
 
-    const stages = [
-      { progress: 10, stage: "Copying raw data..." },
-      { progress: 20, stage: "Detecting CSV structure..." },
-      { progress: 35, stage: "Processing CSV files..." },
-      { progress: 50, stage: "Creating data chunks..." },
-      { progress: 65, stage: "Interpolating data..." },
-      { progress: 80, stage: "Generating metadata..." },
-      { progress: 90, stage: "Finalizing..." },
-    ];
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
 
-    let currentStage = 0;
-    let slowProgress = 90;
-    progressIntervalRef.current = setInterval(() => {
-      if (currentStage < stages.length) {
-        setProgress(stages[currentStage].progress);
-        setProcessingStage(stages[currentStage].stage);
-        currentStage++;
-      } else {
-        // Continue slow progress from 90 to 99 (never reach 100 on our own)
-        if (slowProgress < 99) {
-          slowProgress += 0.5;
-          setProgress(Math.min(slowProgress, 99));
-          setProcessingStage("Processing... please wait");
-        }
-      }
-    }, 1500);
-  };
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
 
-  const stopProgressSimulation = (success: boolean) => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
     }
-    if (success) {
-      setProgress(100);
-      setProcessingStage("Complete!");
+  }, [addFiles]);
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(e.target.files);
+      e.target.value = '';
     }
-    // Small delay before closing to show completion
-    setTimeout(() => {
-      setIsProcessing(false);
-      setProgress(0);
-      setProcessingStage("");
-    }, success ? 1000 : 0);
-  };
+  }, [addFiles]);
 
   const suggestLabelMutation = useMutation({
-    mutationFn: async (folderPath: string) => {
-      const response = await apiRequest("POST", "/api/suggest-label", {
-        folderPath,
-      });
-      return response.json();
+    mutationFn: async () => {
+      // Use the first file's name or folder name to suggest a label
+      const baseName = form.getValues("folderName") ||
+        (selectedFiles.length > 0 ? selectedFiles[0].file.name.replace('.csv', '') : '');
+
+      if (!baseName) {
+        throw new Error("No files selected");
+      }
+
+      // Generate a clean label from the filename
+      const cleanLabel = baseName
+        .replace(/[^a-zA-Z0-9_.-]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .toLowerCase();
+
+      return { success: true, label: cleanLabel };
     },
     onSuccess: (data) => {
       if (data.success && data.label) {
@@ -145,151 +165,154 @@ export function AddDataModal() {
           description: `Suggested label: ${data.label}`,
           duration: 3000,
         });
-      } else {
-        toast({
-          title: "Could not generate label",
-          description: data.message || "Please enter a label manually.",
-          variant: "destructive",
-          duration: 3000,
-        });
       }
     },
     onError: (error: Error) => {
-      console.error("Suggest label error:", error);
       toast({
         title: "Could not generate label",
-        description: "Please enter a label manually.",
+        description: error.message || "Please enter a label manually.",
         variant: "destructive",
         duration: 3000,
       });
     },
   });
 
-  const ingestMutation = useMutation({
-    mutationFn: async (values: FormValues) => {
-      startProgressSimulation();
-      const response = await apiRequest("POST", "/api/ingest", {
-        folderPath: values.folderPath,
+  async function onSubmit(values: FormValues) {
+    if (selectedFiles.length === 0) {
+      toast({
+        title: "No Files Selected",
+        description: "Please select at least one CSV file to upload.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    setProgress(0);
+    setProcessingStage("Uploading files...");
+
+    try {
+      // Step 1: Upload files to raw_database
+      const formData = new FormData();
+      selectedFiles.forEach(sf => {
+        formData.append('files', sf.file);
+      });
+      if (values.folderName) {
+        formData.append('folder_name', values.folderName);
+      }
+
+      setProgress(10);
+
+      const uploadResponse = await fetch('/api/raw-database/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadResult = await uploadResponse.json();
+
+      if (!uploadResponse.ok || !uploadResult.success) {
+        throw new Error(uploadResult.detail || uploadResult.error || 'Upload failed');
+      }
+
+      setUploadedFolderPath(uploadResult.folder_path);
+      setProgress(40);
+      setProcessingStage("Processing data...");
+
+      // Step 2: Trigger ingestion with the uploaded folder
+      const ingestResponse = await apiRequest("POST", "/api/ingest", {
+        folderPath: uploadResult.folder_path,
         classificationLabel: values.label,
       });
-      return response.json();
-    },
-    onSuccess: (data) => {
-      // Poll for the label to appear in the database (up to 60 seconds)
-      const labelToCheck = form.getValues("label");
-      let attempts = 0;
-      const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds max
 
-      const pollForCompletion = async () => {
+      const ingestResult = await ingestResponse.json();
+
+      setProgress(70);
+      setProcessingStage("Finalizing...");
+
+      // Step 3: Poll for completion
+      const labelToCheck = values.label;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      const pollForCompletion = async (): Promise<boolean> => {
         attempts++;
         try {
           const response = await fetch(`/api/labels/${encodeURIComponent(labelToCheck)}`);
           if (response.ok) {
-            // Label exists - processing complete!
-            stopProgressSimulation(true);
-            setTimeout(() => {
-              setOpen(false);
-              setShowBrowser(false);
-              form.reset();
-              queryClient.invalidateQueries({ queryKey: ["/api/labels"] });
-              queryClient.invalidateQueries({ queryKey: ["/api/raw-database"] });
-              toast({
-                title: "Data Processed Successfully",
-                description: data.message || `Data for label "${labelToCheck}" has been processed.`,
-                duration: 5000,
-              });
-            }, 1500);
-            return;
+            return true;
           }
         } catch (e) {
           // Label not ready yet
         }
 
         if (attempts < maxAttempts) {
-          // Keep polling
-          setTimeout(pollForCompletion, 2000);
-        } else {
-          // Timeout - assume it worked since API returned 200
-          stopProgressSimulation(true);
-          setTimeout(() => {
-            setOpen(false);
-            setShowBrowser(false);
-            form.reset();
-            queryClient.invalidateQueries({ queryKey: ["/api/labels"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/raw-database"] });
-            toast({
-              title: "Processing Initiated",
-              description: "Data processing has started. It may take a moment to appear.",
-              duration: 5000,
-            });
-          }, 1500);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          setProgress(70 + (attempts / maxAttempts) * 25);
+          return pollForCompletion();
         }
+        return false;
       };
 
-      // Start polling after a short delay
-      setTimeout(pollForCompletion, 3000);
-    },
-    onError: (error: Error) => {
-      stopProgressSimulation(false);
+      const completed = await pollForCompletion();
+
+      setProgress(100);
+      setProcessingStage("Complete!");
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      setIsProcessing(false);
+      setOpen(false);
+      setSelectedFiles([]);
+      setUploadedFolderPath(null);
+      form.reset();
+
+      queryClient.invalidateQueries({ queryKey: ["/api/labels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/raw-database"] });
+
+      toast({
+        title: "Data Processed Successfully",
+        description: completed
+          ? `Data for label "${labelToCheck}" has been processed.`
+          : "Data processing has started. It may take a moment to appear.",
+        duration: 5000,
+      });
+
+    } catch (error) {
+      setIsProcessing(false);
+      setProgress(0);
+      setProcessingStage("");
       toast({
         title: "Processing Failed",
-        description: error.message || "Failed to process data. Please check the folder path and try again.",
+        description: error instanceof Error ? error.message : "Failed to process data. Please try again.",
         variant: "destructive",
         duration: 5000,
       });
-    },
-  });
-
-  function onSubmit(values: FormValues) {
-    ingestMutation.mutate(values);
+    }
   }
 
-  const handleBrowseClick = () => {
-    setShowBrowser(true);
-    // Start from home directory
-    setCurrentPath("");
-  };
-
-  const handleSelectFolder = (path: string) => {
-    form.setValue("folderPath", path, {
-      shouldValidate: true,
-      shouldDirty: true,
-      shouldTouch: true
-    });
-    setShowBrowser(false);
-    setCurrentPath("");
-  };
-
-  const handleNavigate = (path: string) => {
-    setCurrentPath(path);
+  const handleClose = (isOpen: boolean) => {
+    if (isProcessing) return;
+    setOpen(isOpen);
+    if (!isOpen) {
+      setSelectedFiles([]);
+      setUploadedFolderPath(null);
+      setProgress(0);
+      setProcessingStage("");
+      form.reset();
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (isProcessing) return; // Prevent closing while processing
-      setOpen(isOpen);
-      if (!isOpen) {
-        setShowBrowser(false);
-        setCurrentPath("");
-      }
-    }}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogTrigger asChild>
         <Button size="lg" className="gap-2 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 text-base px-6 py-3 h-12">
           <Plus className="h-5 w-5" /> Add Data
         </Button>
       </DialogTrigger>
-      <DialogContent className={cn(
-        "max-h-[90vh]",
-        showBrowser ? "sm:max-w-[1400px] w-[95vw]" : "sm:max-w-[700px] w-[95vw]"
-      )}>
+      <DialogContent className="sm:max-w-[700px] w-[95vw] max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            {showBrowser ? (
-              <>
-                <FolderOpen className="h-5 w-5" />
-                Select Folder
-              </>
-            ) : isProcessing ? (
+            {isProcessing ? (
               <>
                 <Database className="h-5 w-5 animate-pulse" />
                 Processing Data
@@ -301,33 +324,28 @@ export function AddDataModal() {
               </>
             )}
           </DialogTitle>
-          {!showBrowser && !isProcessing && (
+          {!isProcessing && (
             <DialogDescription>
-              Select a folder containing CSV sensor data files and provide a classification label.
+              Upload CSV sensor data files from your computer and provide a classification label.
             </DialogDescription>
           )}
         </DialogHeader>
 
         {isProcessing ? (
-          // Processing view with progress bar
           <div className="space-y-6 py-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">{processingStage}</span>
-                <span className="font-mono text-muted-foreground">{progress}%</span>
+                <span className="font-mono text-muted-foreground">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-3" />
             </div>
 
             <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-              <div className="flex flex-col gap-1 text-sm">
-                <div className="flex items-center gap-2">
-                  <Folder className="h-4 w-4 text-blue-500 shrink-0" />
-                  <span className="text-muted-foreground">Folder:</span>
-                </div>
-                <code className="text-xs bg-background px-2 py-1.5 rounded break-all ml-6 block w-full overflow-x-auto whitespace-pre-wrap" title={form.getValues("folderPath")}>
-                  {form.getValues("folderPath")}
-                </code>
+              <div className="flex items-center gap-2 text-sm">
+                <FileText className="h-4 w-4 text-blue-500" />
+                <span className="text-muted-foreground">Files:</span>
+                <span className="font-medium">{selectedFiles.length} CSV file(s)</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Database className="h-4 w-4 text-green-500" />
@@ -341,162 +359,130 @@ export function AddDataModal() {
             <p className="text-xs text-center text-muted-foreground">
               Processing runs in the background. You'll be notified when complete.
             </p>
-
-            <div className="flex justify-center pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  stopProgressSimulation(false);
-                  setOpen(false);
-                  form.reset();
-                }}
-                className="gap-2 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : showBrowser ? (
-          <div className="space-y-4">
-            {/* Navigation bar */}
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPath("")}
-                title="Go to home directory"
-                className="h-9 px-2 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
-              >
-                <Home className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (currentPath) {
-                    const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
-                    setCurrentPath(parentPath === '/' ? '' : parentPath);
-                  }
-                }}
-                disabled={!currentPath}
-                title="Go to parent directory"
-                className="h-9 px-2 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex-1 flex items-center gap-2 p-2 bg-muted rounded-lg border h-9">
-                <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                <code className="text-sm truncate font-mono">
-                  {currentPath || "~ (Home)"}
-                </code>
-              </div>
-            </div>
-
-            {/* Directory listing */}
-            <ScrollArea className="h-[700px] border rounded-lg">
-              {dirLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="p-2 space-y-1">
-                  {dirContents?.map((item) => (
-                    <div
-                      key={item.path}
-                      className={cn(
-                        "flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-all",
-                        item.isDirectory
-                          ? "hover:bg-muted hover:shadow-sm"
-                          : "opacity-40 cursor-not-allowed"
-                      )}
-                      onClick={() => item.isDirectory && handleNavigate(item.path)}
-                    >
-                      {item.isDirectory ? (
-                        item.name === ".." ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Folder className="h-4 w-4 text-blue-500" />
-                        )
-                      ) : (
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className={cn("flex-1 truncate", item.name === ".." && "text-muted-foreground italic")}>
-                        {item.name === ".." ? "Go up one level" : item.name}
-                      </span>
-                      {item.isDirectory && item.name !== ".." && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="h-7 px-3 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectFolder(item.path);
-                          }}
-                        >
-                          <Check className="h-3 w-3 mr-1" />
-                          Select
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowBrowser(false)} className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">
-                Cancel
-              </Button>
-              {currentPath && (
-                <Button onClick={() => handleSelectFolder(currentPath)} className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">
-                  <Check className="h-4 w-4 mr-2" />
-                  Select Current Folder
-                </Button>
-              )}
-            </DialogFooter>
           </div>
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-2">
+              {/* File Upload Area */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  CSV Files <span className="text-destructive">*</span>
+                </label>
+
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-6 transition-all cursor-pointer",
+                    isDragging && "border-primary bg-primary/5 scale-[1.01]",
+                    !isDragging && "border-muted-foreground/25 hover:border-primary hover:bg-muted/50"
+                  )}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    multiple
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className={cn(
+                      "rounded-full p-3",
+                      isDragging ? "bg-primary/10" : "bg-muted"
+                    )}>
+                      <Upload className={cn(
+                        "h-6 w-6",
+                        isDragging ? "text-primary" : "text-muted-foreground"
+                      )} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {isDragging ? "Drop files here" : "Click to browse or drag files here"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        CSV files only
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selected Files List */}
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFiles}
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                    <ScrollArea className={cn("border rounded-lg", selectedFiles.length > 4 ? "h-32" : "")}>
+                      <div className="p-2 space-y-1">
+                        {selectedFiles.map((sf) => (
+                          <div
+                            key={sf.id}
+                            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm bg-muted/50"
+                          >
+                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate font-medium">{sf.file.name}</p>
+                              <p className="text-xs text-muted-foreground">{formatFileSize(sf.file.size)}</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFile(sf.id);
+                              }}
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground flex-shrink-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </div>
+
+              {/* Folder Name (Optional) */}
               <FormField
                 control={form.control}
-                name="folderPath"
+                name="folderName"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">
-                      Folder Path <span className="text-destructive">*</span>
+                      Folder Name (optional)
                     </FormLabel>
-                    <div className="flex gap-2">
-                      <FormControl>
-                        <Input
-                          placeholder="Click Browse to select a folder..."
-                          {...field}
-                          className="font-mono text-sm h-11 bg-muted/30 min-w-0"
-                          readOnly
-                          title={field.value}
-                        />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={handleBrowseClick}
-                        className="h-11 px-4 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 shrink-0"
-                      >
-                        <FolderOpen className="h-4 w-4 mr-2" />
-                        Browse
-                      </Button>
-                    </div>
+                    <FormControl>
+                      <Input
+                        placeholder="Auto-generated if empty"
+                        {...field}
+                        className="h-11"
+                      />
+                    </FormControl>
                     <p className="text-xs text-muted-foreground">
-                      Select the folder containing your raw CSV sensor data files
+                      Name for the folder in raw database. Leave empty to auto-generate.
                     </p>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* Classification Label */}
               <FormField
                 control={form.control}
                 name="label"
@@ -508,6 +494,7 @@ export function AddDataModal() {
                     <div className="flex gap-2">
                       <FormControl>
                         <Input
+                          placeholder="e.g., damaged, healthy, baseline"
                           {...field}
                           className="h-11"
                         />
@@ -515,15 +502,10 @@ export function AddDataModal() {
                       <Button
                         type="button"
                         variant="secondary"
-                        onClick={() => {
-                          const folderPath = form.getValues("folderPath");
-                          if (folderPath) {
-                            suggestLabelMutation.mutate(folderPath);
-                          }
-                        }}
-                        disabled={!form.watch("folderPath") || suggestLabelMutation.isPending}
+                        onClick={() => suggestLabelMutation.mutate()}
+                        disabled={selectedFiles.length === 0 || suggestLabelMutation.isPending}
                         className="h-11 px-3 hover:scale-110 hover:shadow-md active:scale-95 transition-all duration-200"
-                        title="Generate label from folder name"
+                        title="Generate label from filename"
                       >
                         {suggestLabelMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -541,25 +523,21 @@ export function AddDataModal() {
               />
 
               <DialogFooter className="gap-2 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  className="hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  disabled={ingestMutation.isPending || !form.watch("folderPath") || !form.watch("label")}
+                  disabled={selectedFiles.length === 0 || !form.watch("label")}
                   className="min-w-[140px] hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                 >
-                  {ingestMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <Database className="mr-2 h-4 w-4" />
-                      Process Data
-                    </>
-                  )}
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload & Process
                 </Button>
               </DialogFooter>
             </form>

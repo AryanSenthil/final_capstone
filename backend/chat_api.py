@@ -21,7 +21,7 @@ from settings.constants import OPENAI_MODEL
 from agent import (
     list_datasets,
     get_dataset_details,
-    browse_directories,
+    list_available_data,
     suggest_label,
     ingest_data,
     delete_dataset,
@@ -59,7 +59,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 TOOL_FUNCTIONS = {
     "list_datasets": list_datasets,
     "get_dataset_details": get_dataset_details,
-    "browse_directories": browse_directories,
+    "list_available_data": list_available_data,
     "suggest_label": suggest_label,
     "ingest_data": ingest_data,
     "delete_dataset": delete_dataset,

@@ -11,7 +11,7 @@ import threading
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
@@ -69,10 +69,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware for frontend development
+# CORS middleware for frontend development and production
+# Allow all origins for internal lab deployment flexibility
+# In production, the frontend proxy handles most requests, so CORS is mainly for direct API access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5000", "http://localhost:5001", "http://localhost:5173", "http://127.0.0.1:5000"],
+    allow_origins=["*"],  # Allow all origins for EC2 deployment flexibility
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -383,72 +385,6 @@ def metadata_to_dataset(label: str, metadata: dict, label_dir: Path) -> Dataset:
 async def root():
     """API health check."""
     return {"status": "ok", "message": "Damage Lab API is running"}
-
-
-class DirectoryItem(BaseModel):
-    name: str
-    path: str
-    isDirectory: bool
-
-
-@app.get("/api/browse", response_model=list[DirectoryItem])
-async def browse_directory(path: str = None):
-    """Browse directories on the server for folder selection."""
-    # Default to home directory if no path provided
-    if not path:
-        path = str(Path.home())
-
-    target_path = Path(path)
-
-    # Security: Resolve to absolute path and check for path traversal
-    try:
-        target_path = target_path.resolve()
-    except (OSError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid path: {path}")
-
-    # Security: Block access to sensitive system directories
-    blocked_paths = [
-        "/etc", "/var", "/usr", "/bin", "/sbin", "/boot", "/root",
-        "/sys", "/proc", "/dev", "/run", "/snap"
-    ]
-    path_str = str(target_path)
-    for blocked in blocked_paths:
-        if path_str == blocked or path_str.startswith(blocked + "/"):
-            raise HTTPException(
-                status_code=403,
-                detail="Access to system directories is not allowed"
-            )
-
-    if not target_path.exists():
-        raise HTTPException(status_code=404, detail=f"Path does not exist: {path}")
-
-    if not target_path.is_dir():
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
-
-    items = []
-
-    # Add parent directory option (unless at root)
-    if target_path.parent != target_path:
-        items.append(DirectoryItem(
-            name="..",
-            path=str(target_path.parent),
-            isDirectory=True
-        ))
-
-    try:
-        for item in sorted(target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-            # Skip hidden files/folders
-            if item.name.startswith('.'):
-                continue
-            items.append(DirectoryItem(
-                name=item.name,
-                path=str(item),
-                isDirectory=item.is_dir()
-            ))
-    except PermissionError:
-        raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
-
-    return items
 
 
 @app.get("/api/labels", response_model=list[Dataset])
@@ -986,6 +922,90 @@ async def get_raw_database():
             ))
 
     return folders
+
+
+class RawUploadResponse(BaseModel):
+    success: bool
+    folder_name: str
+    folder_path: str
+    files_uploaded: int
+    message: str
+
+
+@app.post("/api/raw-database/upload", response_model=RawUploadResponse)
+async def upload_raw_files(
+    files: List[UploadFile] = File(...),
+    folder_name: Optional[str] = None
+):
+    """
+    Upload CSV files from client to raw_database for later ingestion.
+
+    This endpoint receives files from the user's local machine and stores them
+    in the server's raw_database directory for processing.
+    """
+    # Generate folder name if not provided
+    if not folder_name:
+        folder_name = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Sanitize folder name
+    folder_name = re.sub(r'[^\w\-_.]', '_', folder_name)
+
+    # Create folder in raw_database
+    folder_path = RAW_DATABASE_DIR / folder_name
+    folder_path.mkdir(parents=True, exist_ok=True)
+
+    saved_files = []
+    skipped_files = []
+
+    for file in files:
+        # Only accept CSV files
+        if not file.filename or not file.filename.lower().endswith('.csv'):
+            skipped_files.append(file.filename or "unknown")
+            continue
+
+        # Sanitize filename
+        safe_filename = re.sub(r'[^\w\-_.]', '_', file.filename)
+        file_path = folder_path / safe_filename
+
+        try:
+            content = await file.read()
+            with open(file_path, "wb") as f:
+                f.write(content)
+            saved_files.append(safe_filename)
+        except Exception as e:
+            print(f"[ERROR] Failed to save file {file.filename}: {e}")
+            skipped_files.append(file.filename)
+
+    if not saved_files:
+        # Clean up empty folder
+        if folder_path.exists() and not any(folder_path.iterdir()):
+            folder_path.rmdir()
+        raise HTTPException(
+            status_code=400,
+            detail="No valid CSV files were uploaded"
+        )
+
+    # Save metadata
+    metadata = {
+        "imported_at": datetime.now().isoformat(),
+        "source": "web_upload",
+        "files": saved_files,
+        "skipped": skipped_files
+    }
+    with open(folder_path / METADATA_FILENAME, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    message = f"Successfully uploaded {len(saved_files)} file(s)"
+    if skipped_files:
+        message += f", skipped {len(skipped_files)} non-CSV file(s)"
+
+    return RawUploadResponse(
+        success=True,
+        folder_name=folder_name,
+        folder_path=str(folder_path),
+        files_uploaded=len(saved_files),
+        message=message
+    )
 
 
 @app.get("/api/raw-database/{folder_id}", response_model=RawFolder)
