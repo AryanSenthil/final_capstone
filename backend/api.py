@@ -942,13 +942,27 @@ async def upload_raw_files(
 
     This endpoint receives files from the user's local machine and stores them
     in the server's raw_database directory for processing.
+
+    If folder_name is provided, uses that exact name.
+    If folder already exists, appends a number suffix to avoid duplicates.
     """
-    # Generate folder name if not provided
-    if not folder_name:
-        folder_name = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    # Use provided folder name or generate from timestamp
+    if folder_name and folder_name.strip():
+        base_folder_name = folder_name.strip()
+    else:
+        base_folder_name = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     # Sanitize folder name
-    folder_name = re.sub(r'[^\w\-_.]', '_', folder_name)
+    base_folder_name = re.sub(r'[^\w\-_.]', '_', base_folder_name)
+
+    # Check if folder already exists - if so, append a number
+    folder_name = base_folder_name
+    folder_path = RAW_DATABASE_DIR / folder_name
+    counter = 2
+    while folder_path.exists():
+        folder_name = f"{base_folder_name}_{counter}"
+        folder_path = RAW_DATABASE_DIR / folder_name
+        counter += 1
 
     # Create folder in raw_database
     folder_path = RAW_DATABASE_DIR / folder_name

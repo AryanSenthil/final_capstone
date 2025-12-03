@@ -105,20 +105,28 @@ def ingest_sensor_data(
     # Setup directories
     database_label_dir = DATABASE_DIR / classification_label
     raw_database_import_dir = RAW_DATABASE_DIR / import_folder.name
-    
+
     database_label_dir.mkdir(parents=True, exist_ok=True)
-    
+
+    # Check if source folder is ALREADY in raw_database (uploaded via web)
+    # In this case, skip the copy step to avoid duplicates
+    source_is_in_raw_db = str(import_folder.resolve()).startswith(str(RAW_DATABASE_DIR.resolve()))
+
     print("="*70)
     print(f"SENSOR DATA INGESTION PIPELINE")
     print("="*70)
     print(f"Import folder: {import_folder}")
     print(f"Classification: {classification_label}")
-    print(f"Output (raw): {raw_database_import_dir}")
+    if not source_is_in_raw_db:
+        print(f"Output (raw): {raw_database_import_dir}")
+    else:
+        print(f"Source already in raw_database (skipping copy)")
+        raw_database_import_dir = import_folder  # Use existing folder
     print(f"Output (processed): {database_label_dir}")
     print("="*70 + "\n")
-    
-    # Step 1: Copy raw data to raw_database/
-    if COPY_RAW_DATA:
+
+    # Step 1: Copy raw data to raw_database/ (SKIP if already there)
+    if COPY_RAW_DATA and not source_is_in_raw_db:
         print("[STEP 1] Copying raw data to raw_database/...")
         # Handle duplicate folder names like folder, folder(1), folder(2), etc.
         if raw_database_import_dir.exists():
@@ -131,6 +139,8 @@ def ingest_sensor_data(
             print(f"  Folder already exists, saving as: {raw_database_import_dir.name}")
         shutil.copytree(import_folder, raw_database_import_dir)
         print(f"[OK] Copied to: {raw_database_import_dir}\n")
+    elif source_is_in_raw_db:
+        print("[STEP 1] Source already in raw_database - skipping copy\n")
     
     # Get all CSV files
     if RECURSIVE_SEARCH:
