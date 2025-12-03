@@ -41,6 +41,22 @@ backend/chat_sessions/*
 .env.*
 !.env.example
 
+# AWS and SSH keys (CRITICAL - never commit)
+*.pem
+*.key
+*.ppk
+capstone-key.pem
+
+# API keys and credentials
+*credentials*
+*secret*
+*token*
+*api_key*
+*apikey*
+!*example*
+!*template*
+!*sample*
+
 # Python cache
 __pycache__/
 *.pyc

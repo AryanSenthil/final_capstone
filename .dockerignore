@@ -1,0 +1,21 @@
+# Dependencies (rebuilt in container)
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# Large files that shouldn't be in the image
+*.h5
+*.keras
+*.pkl
+*.pt
+*.pth
+datasets/
+data/
+*.wav
+*.csv
+
+# Dev/local stuff
+.git/
+.env
+*.log

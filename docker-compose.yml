@@ -10,7 +10,6 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       # Persist data directories
       - ./backend/database:/app/database
@@ -18,6 +17,8 @@ services:
       - ./backend/models:/app/models
       - ./backend/chat_sessions:/app/chat_sessions
       - ./backend/training_persistence:/app/training_persistence
+      # Persist .env file for API key storage
+      - ./backend/.env:/app/.env
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/labels')"]
       interval: 30s
