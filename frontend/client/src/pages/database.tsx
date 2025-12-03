@@ -19,6 +19,7 @@ export default function DatabasePage() {
 
   const { data: datasets, isLoading, error } = useQuery<Dataset[]>({
     queryKey: ["/api/labels"],
+    refetchInterval: 3000, // Auto-refresh every 3 seconds
     select: (data) => data.map(dataset => ({
       ...dataset,
       name: dataset.label, // Add name alias for backwards compatibility
@@ -89,7 +90,7 @@ export default function DatabasePage() {
             />
           </div>
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px] h-10">
+            <SelectTrigger className="w-[220px] h-10">
               <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>

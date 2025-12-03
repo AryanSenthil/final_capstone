@@ -28,6 +28,7 @@ import {
   Download,
   ExternalLink,
   Folder,
+  FolderOpen,
   Home,
   ChevronLeft,
   Image as ImageIcon,
@@ -73,7 +74,7 @@ interface Artifact {
 }
 
 interface Attachment {
-  type: "file";
+  type: "file" | "folder";
   path: string;
   name: string;
 }
@@ -511,21 +512,23 @@ function ReportViewerModal({
   );
 }
 
-// File Browser Dialog for Attachments
+// File Browser Dialog for Attachments - Select files or folders to reference
 function FileBrowserDialog({
   open,
   onClose,
   onSelectFile,
+  onSelectFolder,
 }: {
   open: boolean;
   onClose: () => void;
   onSelectFile: (path: string, name: string) => void;
+  onSelectFolder?: (path: string, name: string) => void;
 }) {
   const [currentPath, setCurrentPath] = useState("");
   const [items, setItems] = useState<DirectoryItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchDirectory = useCallback(async (path: string) => {
+  const fetchDirectory = async (path: string) => {
     setLoading(true);
     try {
       const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
@@ -541,13 +544,14 @@ function FileBrowserDialog({
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
+  // Only fetch when dialog opens, not on every render
   useEffect(() => {
-    if (open) {
-      fetchDirectory(currentPath);
+    if (open && items.length === 0) {
+      fetchDirectory("");
     }
-  }, [open, fetchDirectory]);
+  }, [open]);
 
   const handleNavigate = (path: string) => {
     fetchDirectory(path);
@@ -565,22 +569,27 @@ function FileBrowserDialog({
   const directories = items.filter((item) => item.isDirectory && item.name !== "..");
   const files = items.filter((item) => !item.isDirectory);
 
+  // Get current folder name for display
+  const currentFolderName = currentPath ? currentPath.split("/").pop() || "folder" : "Home";
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] p-0 overflow-hidden">
-        <DialogHeader className="p-4 pb-2 border-b border-border">
-          <DialogTitle className="text-base font-medium">
-            Select a File to Reference
+      <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[85vh] p-0 overflow-hidden flex flex-col">
+        <DialogHeader className="p-4 pb-3 border-b border-border shrink-0">
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <FolderOpen className="h-5 w-5 text-blue-500" />
+            Select File or Folder to Reference
           </DialogTitle>
         </DialogHeader>
 
         {/* Navigation */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handleGoHome}
-            className="h-8 px-2 hover:scale-105 active:scale-95 transition-all"
+            title="Go to home directory"
+            className="h-9 px-2.5 hover:scale-105 active:scale-95 transition-all"
           >
             <Home className="h-4 w-4" />
           </Button>
@@ -589,74 +598,119 @@ function FileBrowserDialog({
             size="sm"
             onClick={handleGoUp}
             disabled={!currentPath}
-            className="h-8 px-2 hover:scale-105 active:scale-95 transition-all"
+            title="Go to parent directory"
+            className="h-9 px-2.5 hover:scale-105 active:scale-95 transition-all"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="flex-1 px-3 py-1.5 bg-background rounded border text-sm font-mono truncate">
-            {currentPath || "~ (Home)"}
+          <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-background rounded-lg border text-sm font-mono overflow-hidden">
+            <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+            <span className="truncate">{currentPath || "~ (Home)"}</span>
           </div>
         </div>
 
         {/* Directory listing */}
-        <ScrollArea className="h-[400px]">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="p-2 space-y-1">
-              {/* Parent directory link */}
-              {currentPath && (
-                <div
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted transition-colors text-muted-foreground"
-                  onClick={handleGoUp}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  <span className="flex-1 text-sm">..</span>
-                </div>
-              )}
-
-              {directories.map((item) => (
-                <div
-                  key={item.path}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted transition-colors"
-                  onClick={() => handleNavigate(item.path)}
-                >
-                  <Folder className="h-4 w-4 text-blue-500" />
-                  <span className="flex-1 text-sm truncate">{item.name}</span>
-                </div>
-              ))}
-
-              {files.map((item) => (
-                <div
-                  key={item.path}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors group"
-                >
-                  <FileText className="h-4 w-4 text-slate-400" />
-                  <span className="flex-1 text-sm truncate">{item.name}</span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      onSelectFile(item.path, item.name);
-                      onClose();
-                    }}
-                    className="h-7 px-3 text-xs opacity-0 group-hover:opacity-100 hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="h-[500px]">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="p-3 space-y-1">
+                {/* Parent directory link */}
+                {currentPath && (
+                  <div
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer hover:bg-muted transition-colors text-muted-foreground"
+                    onClick={handleGoUp}
                   >
-                    Select
-                  </Button>
-                </div>
-              ))}
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="flex-1 text-sm italic">Go up one level</span>
+                  </div>
+                )}
 
-              {directories.length === 0 && files.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  This directory is empty
-                </div>
-              )}
-            </div>
+                {/* Folders */}
+                {directories.map((item) => (
+                  <div
+                    key={item.path}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
+                    onClick={() => handleNavigate(item.path)}
+                  >
+                    <Folder className="h-5 w-5 text-blue-500 shrink-0" />
+                    <span className="flex-1 text-sm truncate font-medium">{item.name}</span>
+                    {onSelectFolder && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectFolder(item.path, item.name);
+                          onClose();
+                        }}
+                        className="h-8 px-3 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950"
+                      >
+                        <Folder className="h-3 w-3 mr-1.5" />
+                        Select Folder
+                      </Button>
+                    )}
+                  </div>
+                ))}
+
+                {/* Files */}
+                {files.map((item) => (
+                  <div
+                    key={item.path}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted transition-colors group"
+                  >
+                    <FileText className="h-5 w-5 text-slate-400 shrink-0" />
+                    <span className="flex-1 text-sm truncate">{item.name}</span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        onSelectFile(item.path, item.name);
+                        onClose();
+                      }}
+                      className="h-8 px-3 text-xs hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+                    >
+                      <FileText className="h-3 w-3 mr-1.5" />
+                      Select File
+                    </Button>
+                  </div>
+                ))}
+
+                {directories.length === 0 && files.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground text-sm">
+                    This directory is empty
+                  </div>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+
+        {/* Footer with Select Current Folder button */}
+        <div className="p-4 border-t border-border bg-muted/20 shrink-0 flex items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+          >
+            Cancel
+          </Button>
+          {currentPath && onSelectFolder && (
+            <Button
+              onClick={() => {
+                onSelectFolder(currentPath, currentFolderName);
+                onClose();
+              }}
+              className="hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+            >
+              <Folder className="h-4 w-4 mr-2" />
+              Select Current Folder
+            </Button>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -697,9 +751,18 @@ function MessageBubble({
               {attachments.map((att, idx) => (
                 <div
                   key={idx}
-                  className="inline-flex items-center gap-1.5 bg-primary/20 text-primary-foreground/80 px-2.5 py-1 rounded-lg text-xs"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs",
+                    att.type === "folder"
+                      ? "bg-blue-500/30 text-blue-100"
+                      : "bg-primary/20 text-primary-foreground/80"
+                  )}
                 >
-                  <FileText className="w-3 h-3" />
+                  {att.type === "folder" ? (
+                    <Folder className="w-3 h-3" />
+                  ) : (
+                    <FileText className="w-3 h-3" />
+                  )}
                   <span className="truncate max-w-[200px]">{att.name}</span>
                 </div>
               ))}
@@ -852,9 +915,18 @@ function ChatInput({
           {attachments.map((att, idx) => (
             <div
               key={idx}
-              className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700"
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border",
+                att.type === "folder"
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              )}
             >
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              {att.type === "folder" ? (
+                <Folder className="w-3.5 h-3.5 text-blue-500" />
+              ) : (
+                <FileText className="w-3.5 h-3.5 text-slate-500" />
+              )}
               <span className="truncate max-w-[200px]">{att.name}</span>
               {onRemoveAttachment && (
                 <button
@@ -1033,10 +1105,38 @@ export default function ChatPage() {
       // Build message content with attachments reference
       let messageContent = text;
       if (attachments && attachments.length > 0) {
-        const fileRefs = attachments.map((a) => `[File: ${a.path}]`).join("\n");
-        messageContent = attachments.length > 0 && text
-          ? `${text}\n\nReferenced files:\n${fileRefs}`
-          : text || `Please analyze these files:\n${fileRefs}`;
+        const refs = attachments.map((a) => {
+          if (a.type === "folder") {
+            return `Folder for data ingestion: ${a.path}`;
+          }
+          const ext = a.name.split('.').pop()?.toLowerCase() || '';
+          if (ext === 'csv') {
+            return `CSV file for testing: ${a.path}`;
+          } else if (ext === 'pdf') {
+            return `PDF file to read: ${a.path}`;
+          } else {
+            return `File: ${a.path}`;
+          }
+        }).join("\n");
+
+        if (text) {
+          messageContent = `${text}\n\nAttached:\n${refs}`;
+        } else {
+          // No text provided, create a helpful prompt based on attachment types
+          const hasFolder = attachments.some(a => a.type === "folder");
+          const hasCSV = attachments.some(a => a.type === "file" && a.name.toLowerCase().endsWith('.csv'));
+          const hasPDF = attachments.some(a => a.type === "file" && a.name.toLowerCase().endsWith('.pdf'));
+
+          if (hasFolder && !hasCSV && !hasPDF) {
+            messageContent = `Please help me with this folder:\n${refs}`;
+          } else if (hasCSV && !hasPDF && !hasFolder) {
+            messageContent = `Please run inference/testing on this file:\n${refs}`;
+          } else if (hasPDF && !hasCSV && !hasFolder) {
+            messageContent = `Please read and summarize this PDF:\n${refs}`;
+          } else {
+            messageContent = `Please analyze these:\n${refs}`;
+          }
+        }
       }
 
       const userMsg: ChatMessage = {
@@ -1168,8 +1268,12 @@ export default function ChatPage() {
   };
 
   // Attachment handlers
-  const handleAddAttachment = (path: string, name: string) => {
+  const handleAddFile = (path: string, name: string) => {
     setPendingAttachments((prev) => [...prev, { type: "file", path, name }]);
+  };
+
+  const handleAddFolder = (path: string, name: string) => {
+    setPendingAttachments((prev) => [...prev, { type: "folder", path, name }]);
   };
 
   const handleRemoveAttachment = (index: number) => {
@@ -1235,9 +1339,6 @@ export default function ChatPage() {
         {/* Spacer and Status */}
         <div className="flex-1" />
         <div className="flex items-center gap-2 pr-2 shrink-0">
-          <Badge variant="outline" className="text-[10px] font-normal">
-            GPT-5.1
-          </Badge>
           {isStreaming && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -1328,7 +1429,8 @@ export default function ChatPage() {
       <FileBrowserDialog
         open={showFileBrowser}
         onClose={() => setShowFileBrowser(false)}
-        onSelectFile={handleAddAttachment}
+        onSelectFile={handleAddFile}
+        onSelectFolder={handleAddFolder}
       />
 
       {/* Image Expand Modal */}

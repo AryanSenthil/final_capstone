@@ -14,8 +14,9 @@ declare module "http" {
 }
 
 // IMPORTANT: Proxy must be BEFORE body parsers to forward raw request body
+const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 const apiProxy = createProxyMiddleware({
-  target: "http://localhost:8000",
+  target: backendUrl,
   changeOrigin: true,
   pathRewrite: undefined, // Keep the path as-is (don't strip /api)
 });

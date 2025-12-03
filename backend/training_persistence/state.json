@@ -1,11 +1,8 @@
 {
-  "model_name": "cnn_quarter_half_disbond",
-  "selected_labels": [
-    "0.25_disbond",
-    "0.5_disbond"
-  ],
+  "model_name": "",
+  "selected_labels": [],
   "architecture": "CNN",
-  "status": "complete",
-  "job_id": "3f80d288",
-  "last_updated": "2025-12-01T03:42:31.036968"
+  "status": "idle",
+  "job_id": null,
+  "last_updated": "2025-12-03T04:35:53.334465"
 }

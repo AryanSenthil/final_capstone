@@ -42,7 +42,17 @@ from damage_lab_agent import (
     get_test_details,
     get_test_statistics,
     delete_test,
+    # Enhanced Analysis
+    get_workflow_guidance,
+    compare_models,
+    get_dataset_summary,
+    get_training_recommendations,
+    explain_results,
     # Reporting & System
+    get_model_graphs,
+    get_report_url,
+    read_pdf,
+    read_report,
     list_reports,
     get_system_status,
     # Constants
@@ -56,6 +66,7 @@ MODEL = "gpt-5.1"
 
 # Map of function names to actual functions
 TOOL_FUNCTIONS: dict[str, Callable] = {
+    # Data Management
     "list_datasets": list_datasets,
     "get_dataset_details": get_dataset_details,
     "browse_directories": browse_directories,
@@ -64,6 +75,7 @@ TOOL_FUNCTIONS: dict[str, Callable] = {
     "delete_dataset": delete_dataset,
     "generate_dataset_metadata": generate_dataset_metadata,
     "list_raw_folders": list_raw_folders,
+    # Model Training
     "list_models": list_models,
     "get_model_details": get_model_details,
     "suggest_model_name": suggest_model_name,
@@ -71,11 +83,23 @@ TOOL_FUNCTIONS: dict[str, Callable] = {
     "get_training_status": get_training_status,
     "wait_for_training": wait_for_training,
     "delete_model": delete_model,
+    # Inference/Testing
     "run_inference": run_inference,
     "list_tests": list_tests,
     "get_test_details": get_test_details,
     "get_test_statistics": get_test_statistics,
     "delete_test": delete_test,
+    # Enhanced Analysis
+    "get_workflow_guidance": get_workflow_guidance,
+    "compare_models": compare_models,
+    "get_dataset_summary": get_dataset_summary,
+    "get_training_recommendations": get_training_recommendations,
+    "explain_results": explain_results,
+    # Reporting & System
+    "get_model_graphs": get_model_graphs,
+    "get_report_url": get_report_url,
+    "read_pdf": read_pdf,
+    "read_report": read_report,
     "list_reports": list_reports,
     "get_system_status": get_system_status,
 }

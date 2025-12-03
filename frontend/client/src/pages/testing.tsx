@@ -28,6 +28,7 @@ export default function TestingPage() {
   // Fetch tests
   const { data: tests = [], isLoading } = useQuery<TestSummary[]>({
     queryKey: ['/api/tests'],
+    refetchInterval: 3000, // Auto-refresh every 3 seconds
   });
 
   // Compute unique models from tests
@@ -135,7 +136,7 @@ export default function TestingPage() {
         <Button
           onClick={() => setIsModalOpen(true)}
           size="lg"
-          className="gap-2 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200"
+          className="gap-2 shadow-md hover:shadow-lg hover:shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
         >
           <Plus className="h-5 w-5" />
           Test New File

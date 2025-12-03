@@ -97,10 +97,9 @@ def _generate_title_from_model_name(model_name: str) -> str:
 
 
 def _generate_filename_from_model_name(model_name: str) -> str:
-    """Generate filename from model name."""
+    """Generate filename from model name - format: model_name_report"""
     import re
     # Sanitize: allow lowercase, numbers, underscores, and parentheses
-    # Replace spaces and other chars with underscores, but keep () for names like cnn(2)
     filename = re.sub(r'[^a-z0-9_()]', '_', model_name.lower())
     # Clean up multiple underscores
     filename = re.sub(r'_+', '_', filename).strip('_')

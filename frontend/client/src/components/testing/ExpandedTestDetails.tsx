@@ -189,7 +189,7 @@ export default function ExpandedTestDetails({ test, onDelete }: ExpandedTestDeta
                   onClick={handleDownload}
                   variant="default"
                   aria-label="Download CSV file"
-                  className="h-10 px-5"
+                  className="h-10 px-5 hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download CSV

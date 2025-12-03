@@ -3,8 +3,8 @@ Model deletion utilities.
 
 This module provides comprehensive cleanup when a model is deleted,
 including:
-- Archiving reports before deletion (preserved in reports_archive/)
-- Removing model directory and all files
+- Removing model directory and all files (including reports)
+- Deleting all tests that used this model
 - Cleaning training job entries in training_jobs.json
 - Clearing training state persistence if it references this model
 """
@@ -18,7 +18,6 @@ from typing import Optional
 # Directory paths (relative to backend)
 BACKEND_DIR = Path(__file__).parent.parent
 MODELS_DIR = BACKEND_DIR / "models"
-REPORTS_ARCHIVE_DIR = BACKEND_DIR / "reports_archive"
 TRAINING_JOBS_PATH = BACKEND_DIR / "training_jobs.json"
 TRAINING_PERSISTENCE_DIR = BACKEND_DIR / "training_persistence"
 TEST_DATABASE_DIR = BACKEND_DIR / "test_database"
@@ -36,21 +35,21 @@ def delete_model_complete(model_id: str) -> dict:
     """
     results = {
         "model_directory_deleted": False,
-        "reports_archived": 0,
+        "reports_deleted": 0,
         "training_jobs_cleaned": 0,
         "training_state_cleared": False,
-        "tests_updated": 0,
+        "tests_deleted": 0,
         "errors": []
     }
 
     model_dir = MODELS_DIR / model_id
 
-    # 1. Archive reports BEFORE deleting model directory
+    # 1. Count reports (they'll be deleted with model directory)
     try:
-        archived_count = _archive_reports(model_id, model_dir)
-        results["reports_archived"] = archived_count
+        if model_dir.exists():
+            results["reports_deleted"] = len(list(model_dir.glob("*.pdf")))
     except Exception as e:
-        results["errors"].append(f"Failed to archive reports: {str(e)}")
+        results["errors"].append(f"Failed to count reports: {str(e)}")
 
     # 2. Delete model directory
     if model_dir.exists():
@@ -76,60 +75,14 @@ def delete_model_complete(model_id: str) -> dict:
     except Exception as e:
         results["errors"].append(f"Failed to clear training persistence: {str(e)}")
 
-    # 5. Update tests that used this model (mark model as deleted)
+    # 5. Delete tests that used this model
     try:
-        updated_count = _update_tests_for_deleted_model(model_id)
-        results["tests_updated"] = updated_count
+        deleted_count = _delete_tests_for_model(model_id)
+        results["tests_deleted"] = deleted_count
     except Exception as e:
-        results["errors"].append(f"Failed to update tests: {str(e)}")
+        results["errors"].append(f"Failed to delete tests: {str(e)}")
 
     return results
-
-
-def _archive_reports(model_id: str, model_dir: Path) -> int:
-    """
-    Archive PDF reports from the model directory before deletion.
-    Reports are copied to reports_archive/ with model name prefix.
-
-    Args:
-        model_id: The model name
-        model_dir: Path to the model directory
-
-    Returns:
-        Number of reports archived
-    """
-    if not model_dir.exists():
-        return 0
-
-    # Create archive directory if it doesn't exist
-    REPORTS_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-
-    archived_count = 0
-
-    # Find all PDF files in the model directory
-    for pdf_file in model_dir.glob("*.pdf"):
-        # Create archive filename with timestamp to avoid conflicts
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archive_name = f"{model_id}_{pdf_file.stem}_{timestamp}.pdf"
-        archive_path = REPORTS_ARCHIVE_DIR / archive_name
-
-        # Copy the report to archive
-        shutil.copy2(pdf_file, archive_path)
-        archived_count += 1
-
-        # Also create a metadata file for the archived report
-        metadata = {
-            "original_model": model_id,
-            "original_filename": pdf_file.name,
-            "archived_at": datetime.now().isoformat(),
-            "archive_path": str(archive_path)
-        }
-
-        metadata_path = archive_path.with_suffix(".json")
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-
-    return archived_count
 
 
 def _cleanup_training_jobs(model_id: str) -> int:
@@ -217,43 +170,76 @@ def _clear_training_persistence(model_id: str) -> bool:
     return True
 
 
-def _update_tests_for_deleted_model(model_id: str) -> int:
+def _delete_tests_for_model(model_id: str) -> int:
     """
-    Update test metadata to mark the model as deleted.
-    Tests are preserved for historical reference, but model_name is updated.
+    Delete all tests associated with a model.
 
     Args:
         model_id: The model name that was deleted
 
     Returns:
-        Number of tests updated
+        Number of tests deleted
     """
     metadata_dir = TEST_DATABASE_DIR / "metadata"
+    processed_chunks_dir = TEST_DATABASE_DIR / "processed_chunks"
+    raw_csvs_dir = TEST_DATABASE_DIR / "raw_csvs"
+
     if not metadata_dir.exists():
         return 0
 
-    updated_count = 0
+    deleted_count = 0
+    tests_to_delete = []
 
+    # Find all tests that used this model
     for metadata_file in metadata_dir.glob("*.json"):
         try:
             with open(metadata_file, 'r') as f:
                 test_data = json.load(f)
 
             if test_data.get("model_name") == model_id:
-                # Mark model as deleted but preserve test data
-                test_data["model_name"] = f"{model_id} [Deleted]"
-                test_data["model_deleted"] = True
-                test_data["model_deleted_at"] = datetime.now().isoformat()
-
-                with open(metadata_file, 'w') as f:
-                    json.dump(test_data, f, indent=2)
-
-                updated_count += 1
+                test_id = metadata_file.stem
+                tests_to_delete.append(test_id)
         except Exception:
-            # Skip files that can't be read
             continue
 
-    return updated_count
+    # Delete each test's files
+    for test_id in tests_to_delete:
+        try:
+            # Delete metadata file
+            metadata_file = metadata_dir / f"{test_id}.json"
+            if metadata_file.exists():
+                metadata_file.unlink()
+
+            # Delete processed chunks directory
+            chunks_dir = processed_chunks_dir / test_id
+            if chunks_dir.exists():
+                shutil.rmtree(chunks_dir)
+
+            # Delete raw CSV file
+            raw_csv = raw_csvs_dir / f"{test_id}.csv"
+            if raw_csv.exists():
+                raw_csv.unlink()
+
+            deleted_count += 1
+        except Exception:
+            continue
+
+    # Update test_index.json if it exists
+    test_index_path = BACKEND_DIR / "test_index.json"
+    if test_index_path.exists():
+        try:
+            with open(test_index_path, 'r') as f:
+                test_index = json.load(f)
+
+            # Filter out deleted tests
+            test_index = [t for t in test_index if t.get("test_id") not in tests_to_delete]
+
+            with open(test_index_path, 'w') as f:
+                json.dump(test_index, f, indent=2)
+        except Exception:
+            pass
+
+    return deleted_count
 
 
 def get_model_dependencies(model_id: str) -> dict:

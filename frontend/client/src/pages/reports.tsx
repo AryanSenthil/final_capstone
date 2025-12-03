@@ -66,6 +66,7 @@ export default function ReportsPage() {
 
   const { data: reports = [], isLoading } = useQuery<Report[]>({
     queryKey: ["/api/reports"],
+    refetchInterval: 3000, // Auto-refresh every 3 seconds
   });
 
   const deleteMutation = useMutation({
@@ -401,11 +402,11 @@ export default function ReportsPage() {
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Report</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <span className="font-semibold text-foreground">{reportToDelete?.name}</span>?
+              Are you sure you want to delete <span className="font-semibold text-foreground break-all">{reportToDelete?.name}</span>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

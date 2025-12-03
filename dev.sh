@@ -6,7 +6,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}🧹 Cleaning up previous processes...${NC}"
+echo -e "${YELLOW} Cleaning up previous processes...${NC}"
 
 # Kill processes on port 8000 (backend)
 BACKEND_PID=$(lsof -ti:8000)
@@ -31,7 +31,7 @@ fi
 # Wait a moment for ports to be released
 sleep 1
 
-echo -e "\n${GREEN}🚀 Starting development servers...${NC}\n"
+echo -e "\n${GREEN} Starting development servers...${NC}\n"
 
 # Start backend in background
 echo -e "${YELLOW}Starting backend on port 8000...${NC}"
@@ -45,7 +45,7 @@ cd /home/ari/Documents/final_capstone/frontend && npm run dev > /tmp/frontend.lo
 FRONTEND_PID=$!
 echo -e "${GREEN}✓ Frontend started (PID: $FRONTEND_PID)${NC}"
 
-echo -e "\n${GREEN}✅ Development servers started!${NC}"
+echo -e "\n${GREEN}Development servers started!${NC}"
 echo -e "${YELLOW}Backend: http://localhost:8000${NC}"
 echo -e "${YELLOW}Frontend: http://localhost:5000${NC}"
 echo -e "\n${YELLOW}Logs:${NC}"

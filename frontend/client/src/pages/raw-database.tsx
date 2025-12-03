@@ -79,6 +79,7 @@ export default function RawDatabasePage() {
   // Fetch raw folders
   const { data: rawFolders, isLoading, error } = useQuery<RawFolder[]>({
     queryKey: ["/api/raw-database"],
+    refetchInterval: 3000, // Auto-refresh every 3 seconds
   });
 
   // Filter and sort folders
@@ -168,7 +169,7 @@ export default function RawDatabasePage() {
             />
           </div>
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px] h-10">
+            <SelectTrigger className="w-[220px] h-10">
               <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>

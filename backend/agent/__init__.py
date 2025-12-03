@@ -44,6 +44,7 @@ from .damage_lab_agent import (
     # Reporting & System
     get_model_graphs,
     get_report_url,
+    read_pdf,
     read_report,
     list_reports,
     get_system_status,
@@ -80,6 +81,7 @@ __all__ = [
     "explain_results",
     "get_model_graphs",
     "get_report_url",
+    "read_pdf",
     "read_report",
     "list_reports",
     "get_system_status",

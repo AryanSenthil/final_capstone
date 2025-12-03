@@ -21,28 +21,29 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          // Primary button: glass effect with blue background and glow on hover
-          "glass bg-primary/90 text-primary-foreground border-primary/30 " +
-          "hover:bg-primary hover:shadow-[--glass-shadow-hover,--glass-glow] hover:scale-[1.02] hover:border-[--glass-border-hover] " +
-          "active:scale-[0.98] active:shadow-[--glass-shadow-active] " +
-          "backdrop-blur-md",
+          // Primary button: solid blue background with glow on hover
+          // NOTE: Don't use 'glass' class here - it overrides bg-primary with white in light mode
+          "bg-primary text-primary-foreground border border-primary/30 shadow-md " +
+          "hover:bg-primary/90 hover:shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02] hover:border-blue-400/50 " +
+          "active:scale-[0.98] active:shadow-md " +
+          "backdrop-blur-sm",
         destructive:
-          // Destructive button: glass effect with red background
-          "glass bg-destructive/90 text-destructive-foreground border-destructive/30 " +
-          "hover:bg-destructive hover:shadow-[--glass-shadow-hover] hover:shadow-red-500/20 hover:scale-[1.02] " +
-          "active:scale-[0.98] active:shadow-[--glass-shadow-active] " +
-          "backdrop-blur-md",
+          // Destructive button: solid red background with glow on hover
+          "bg-destructive text-destructive-foreground border border-destructive/30 shadow-md " +
+          "hover:bg-destructive/90 hover:shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] " +
+          "active:scale-[0.98] active:shadow-md " +
+          "backdrop-blur-sm",
         outline:
           // Outline button: subtle glass effect with transparent background
           "glass-light bg-transparent border-[--glass-border] " +
           "hover:bg-[--glass-bg-hover] hover:border-[--glass-border-hover] hover:shadow-[--glass-shadow-hover,--glass-glow] hover:scale-[1.02] " +
           "active:bg-[--glass-bg-active] active:scale-[0.98] active:shadow-none",
         secondary:
-          // Secondary button: glass effect with muted background
-          "glass bg-secondary/80 text-secondary-foreground border-secondary/40 " +
-          "hover:bg-secondary hover:border-[--glass-border-hover] hover:shadow-[--glass-shadow-hover] hover:scale-[1.02] " +
-          "active:scale-[0.98] active:shadow-[--glass-shadow-active] " +
-          "backdrop-blur-md",
+          // Secondary button: solid muted background
+          "bg-secondary text-secondary-foreground border border-secondary/40 shadow-sm " +
+          "hover:bg-secondary/90 hover:border-slate-400/50 hover:shadow-md hover:scale-[1.02] " +
+          "active:scale-[0.98] active:shadow-sm " +
+          "backdrop-blur-sm",
         ghost:
           // Ghost button: minimal glass effect, appears on hover
           "border-transparent bg-transparent " +

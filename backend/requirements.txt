@@ -1,5 +1,5 @@
 # Core ML/AI packages
-tensorflow[and-cuda]
+tensorflow
 tensorboard
 keras
 scikit-learn

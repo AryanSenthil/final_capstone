@@ -1843,6 +1843,64 @@ def get_report_url(model_id: str) -> dict:
         return {"status": "error", "error_message": str(e)}
 
 
+def read_pdf(file_path: str) -> dict:
+    """
+    Read and extract the text content from any PDF file.
+
+    Args:
+        file_path: Full path to the PDF file to read
+
+    Returns:
+        dict: Contains the extracted text content from the PDF.
+              Use this to read and analyze any PDF document.
+
+    This tool allows you to read any PDF file so you can:
+    - Answer questions about the document's content
+    - Summarize the PDF
+    - Extract specific information from the document
+    - Analyze reports, papers, or any PDF document
+    """
+    try:
+        import fitz  # PyMuPDF
+
+        pdf_path = Path(file_path)
+
+        if not pdf_path.exists():
+            return {"status": "error", "error_message": f"PDF file not found: {file_path}"}
+
+        if not pdf_path.suffix.lower() == '.pdf':
+            return {"status": "error", "error_message": f"File is not a PDF: {file_path}"}
+
+        # Extract text from PDF
+        doc = fitz.open(str(pdf_path))
+        text_content = []
+
+        for page_num, page in enumerate(doc, 1):
+            page_text = page.get_text()
+            if page_text.strip():
+                text_content.append(f"--- Page {page_num} ---\n{page_text}")
+
+        doc.close()
+
+        full_text = "\n\n".join(text_content)
+
+        return {
+            "status": "success",
+            "file_path": file_path,
+            "file_name": pdf_path.name,
+            "content": full_text,
+            "page_count": len(text_content)
+        }
+
+    except ImportError:
+        return {
+            "status": "error",
+            "error_message": "PDF reading library (PyMuPDF) not installed. Run: pip install pymupdf"
+        }
+    except Exception as e:
+        return {"status": "error", "error_message": str(e)}
+
+
 def read_report(model_id: str) -> dict:
     """
     Read and extract the text content from a model's training report PDF.
@@ -2160,11 +2218,29 @@ Be a helpful guide throughout the user's workflow. You are their AI assistant th
 3. Has trained model → Suggest testing with new data or viewing reports
 4. After testing → Explain results and suggest next actions
 
-## Handling File References
-When users attach files or reference file paths in their messages:
-- The file paths will be provided in the message
-- Use the appropriate tool based on context (run_inference for testing, browse_directories for exploring)
-- Acknowledge the files they referenced before performing actions
+## Handling File and Folder References
+When users attach files or folders in their messages:
+- Attachments are provided in these formats:
+  - "Folder for data ingestion: /path/to/folder" → Use `ingest_data(folder_path="/path/to/folder", label="...")`
+  - "CSV file for testing: /path/to/file.csv" → Use `run_inference(csv_path="/path/to/file.csv", model_id="...")`
+  - "PDF file to read: /path/to/file.pdf" → Use `read_pdf(file_path="/path/to/file.pdf")`
+- Extract the actual path from the message (everything after the colon)
+- Always acknowledge what was attached before processing
+
+**For FOLDERS** (data ingestion):
+1. Ask the user for a classification label if not specified
+2. Use `ingest_data(folder_path="<the_path>", label="<user_provided_label>")`
+3. This will process the CSV files in that folder and add them to the database
+
+**For CSV FILES** (testing/inference):
+1. First check available models with `list_models()`
+2. Ask which model to use (if not specified)
+3. Run `run_inference(csv_path="<the_path>", model_id="<selected_model>")`
+4. Explain the results in plain language
+
+**For PDF FILES**:
+1. Use `read_pdf(file_path="<the_path>")` to read the content
+2. Summarize or answer questions about the PDF
 
 Be helpful, friendly, and guide users step by step.
 When something goes wrong, explain simply and suggest what to try next."""
@@ -2208,6 +2284,7 @@ ALL_TOOLS = [
     # Reporting & System
     get_model_graphs,
     get_report_url,
+    read_pdf,
     read_report,
     list_reports,
     get_system_status,

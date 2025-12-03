@@ -105,6 +105,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Sidebar Footer / Collapse Toggle with glass border */}
         <div className="p-2 border-t border-[--glass-border] flex flex-col gap-1">
+          {!isCollapsed && (
+            <div className="px-2 mb-1 text-[10px] text-muted-foreground/70 space-y-0.5">
+              <p>Refresh page if data doesn't appear.</p>
+              <p>Deleting models/data removes associated reports & tests.</p>
+            </div>
+          )}
           <Button
             variant="ghost"
             size="sm"
